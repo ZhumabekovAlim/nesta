@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    environment:
+      APP_ENV: development
+      PORT: 8080
+      DB_URL: postgres://nesta:nesta@postgres:5432/nesta?sslmode=disable
+      JWT_SECRET: dev-secret
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 720h
+      OTP_TTL: 5m
+      OTP_RATE_LIMIT: 1m
+      OTP_MAX_ATTEMPTS: 5
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nesta
+      POSTGRES_USER: nesta
+      POSTGRES_PASSWORD: nesta
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
