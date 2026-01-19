@@ -498,3 +498,58 @@ payments: init + webhook (можно “ручной платеж” через 
 pickup_logs/маршруты
 
 уведомления
+
+---
+
+## Быстрый старт (Docker)
+
+```bash
+docker compose up --build
+```
+
+После запуска API доступен на `http://localhost:8080`.
+
+### Health/Ready
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+```
+
+## Локальный запуск без Docker (опционально)
+
+```bash
+export DB_URL="postgres://nesta:nesta@localhost:5432/nesta?sslmode=disable"
+export PORT=8080
+export APP_ENV=development
+export JWT_SECRET="dev-secret"
+export ACCESS_TOKEN_TTL=15m
+export REFRESH_TOKEN_TTL=720h
+export OTP_TTL=5m
+export OTP_RATE_LIMIT=1m
+export OTP_MAX_ATTEMPTS=5
+
+go run ./cmd/api
+```
+
+## Переменные окружения
+
+- `DB_URL` — строка подключения к PostgreSQL.
+- `PORT` — порт HTTP сервера.
+- `APP_ENV` — окружение (`development` включает консольный логгер).
+- `JWT_SECRET` — секрет для подписи JWT.
+- `ACCESS_TOKEN_TTL` — TTL access токена (например `15m`).
+- `REFRESH_TOKEN_TTL` — TTL refresh токена (например `720h`).
+- `OTP_TTL` — время жизни OTP кода (например `5m`).
+- `OTP_RATE_LIMIT` — ограничение отправки OTP по телефону (например `1m`).
+- `OTP_MAX_ATTEMPTS` — максимум попыток ввода OTP.
+
+## Миграции
+
+В репозитории есть SQL миграция: `migrations/001_init.sql`. Формат совместим с `goose`.
+
+Пример запуска (goose должен быть установлен локально):
+
+```bash
+goose -dir migrations postgres "$DB_URL" up
+```
