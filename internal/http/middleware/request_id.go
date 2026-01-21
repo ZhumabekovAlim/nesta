@@ -12,9 +12,9 @@ func RequestID(next http.Handler) http.Handler {
 }
 
 func GetRequestID(ctx context.Context) string {
-	id := hlog.IDFromCtx(ctx)
-	if id == nil {
+	id, _ := hlog.IDFromCtx(ctx)
+	if id == "" {
 		return ""
 	}
-	return id.String()
+	return id
 }
