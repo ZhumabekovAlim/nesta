@@ -67,7 +67,7 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Address:         req.Address,
 		City:            req.City,
 		Status:          req.Status,
-		Threshold:       req.Threshold,
+		Threshold:       defaultThreshold(req.Threshold),
 		CurrentRequests: 0,
 	}
 
@@ -77,6 +77,13 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusCreated, complex)
+}
+
+func defaultThreshold(value int) int {
+	if value == 0 {
+		return 30
+	}
+	return value
 }
 
 func (h ComplexHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
