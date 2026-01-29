@@ -10,6 +10,7 @@ import (
 type ResidentialComplex struct {
 	ID              string
 	Name            string
+	Address         string
 	City            string
 	Status          string
 	Threshold       int
@@ -30,7 +31,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 	idx := 1
 
 	if search != "" {
-		filters = append(filters, "LOWER(name) LIKE $"+itoa(idx))
+		filters = append(filters, "(LOWER(name) LIKE $"+itoa(idx)+" OR LOWER(COALESCE(address, '')) LIKE $"+itoa(idx)+")")
 		args = append(args, "%"+strings.ToLower(search)+"%")
 		idx++
 	}
@@ -48,7 +49,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 		filters = append(filters, "status = 'ACTIVE'")
 	}
 
-	query := `SELECT id, name, city, status, threshold_n, current_requests FROM residential_complexes WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
+	query := `SELECT id, name, address, city, status, threshold_n, current_requests FROM residential_complexes WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -60,7 +61,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 	var complexes []ResidentialComplex
 	for rows.Next() {
 		var item ResidentialComplex
-		if err := rows.Scan(&item.ID, &item.Name, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests); err != nil {
 			return nil, err
 		}
 		complexes = append(complexes, item)
@@ -71,10 +72,10 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 func (r *ComplexRepository) Get(ctx context.Context, id string) (ResidentialComplex, error) {
 	var item ResidentialComplex
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, city, status, threshold_n, current_requests
+		SELECT id, name, address, city, status, threshold_n, current_requests
 		FROM residential_complexes
 		WHERE id = $1
-	`, id).Scan(&item.ID, &item.Name, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests)
+	`, id).Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests)
 	return item, err
 }
 
@@ -87,9 +88,9 @@ func (r *ComplexRepository) UpdateStatusAndRequests(ctx context.Context, id, sta
 
 func (r *ComplexRepository) Create(ctx context.Context, complex ResidentialComplex) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO residential_complexes (id, name, city, status, threshold_n, current_requests)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, complex.ID, complex.Name, complex.City, complex.Status, complex.Threshold, complex.CurrentRequests)
+		INSERT INTO residential_complexes (id, name, address, city, status, threshold_n, current_requests)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, complex.ID, complex.Name, complex.Address, complex.City, complex.Status, complex.Threshold, complex.CurrentRequests)
 	return err
 }
 
