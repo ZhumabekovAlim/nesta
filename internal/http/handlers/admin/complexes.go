@@ -18,6 +18,7 @@ type ComplexHandler struct {
 
 type complexCreateRequest struct {
 	Name      string `json:"name"`
+	Address   string `json:"address"`
 	City      string `json:"city"`
 	Status    string `json:"status"`
 	Threshold int    `json:"threshold_n"`
@@ -63,6 +64,7 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 	complex := repositories.ResidentialComplex{
 		ID:              id,
 		Name:            req.Name,
+		Address:         req.Address,
 		City:            req.City,
 		Status:          req.Status,
 		Threshold:       req.Threshold,

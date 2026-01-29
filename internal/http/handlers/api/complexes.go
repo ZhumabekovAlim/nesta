@@ -28,7 +28,14 @@ func (h ComplexHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit := parseInt(query.Get("limit"), 20)
 	offset := parseInt(query.Get("offset"), 0)
-	items, err := h.Complexes.List(r.Context(), query.Get("search"), query.Get("status"), query.Get("city"), query.Get("only_active") == "1", limit, offset)
+	onlyActive := true
+	if query.Get("status") != "" {
+		onlyActive = false
+	}
+	if query.Get("only_active") != "" {
+		onlyActive = query.Get("only_active") == "1"
+	}
+	items, err := h.Complexes.List(r.Context(), query.Get("search"), query.Get("status"), query.Get("city"), onlyActive, limit, offset)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to list", RequestID: middleware.GetRequestID(r.Context())})
 		return
