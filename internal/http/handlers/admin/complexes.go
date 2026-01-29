@@ -18,6 +18,7 @@ type ComplexHandler struct {
 
 type complexCreateRequest struct {
 	Name      string `json:"name"`
+	Address   string `json:"address"`
 	City      string `json:"city"`
 	Status    string `json:"status"`
 	Threshold int    `json:"threshold_n"`
@@ -63,9 +64,10 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 	complex := repositories.ResidentialComplex{
 		ID:              id,
 		Name:            req.Name,
+		Address:         req.Address,
 		City:            req.City,
 		Status:          req.Status,
-		Threshold:       req.Threshold,
+		Threshold:       defaultThreshold(req.Threshold),
 		CurrentRequests: 0,
 	}
 
@@ -75,6 +77,13 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusCreated, complex)
+}
+
+func defaultThreshold(value int) int {
+	if value == 0 {
+		return 30
+	}
+	return value
 }
 
 func (h ComplexHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
