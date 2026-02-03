@@ -57,6 +57,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/auth/logout", deps.Auth.Logout)
 
 	mux.Handle("/api/v1/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.Me)))
+	mux.Handle("/api/v1/profile", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.UpdateMe)))
 	mux.Handle("/api/v1/subscriptions", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.Create)))
 	mux.Handle("/api/v1/subscriptions/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.ListMine)))
 	mux.Handle("/api/v1/subscriptions/", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.Update)))

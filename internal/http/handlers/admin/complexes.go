@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 
@@ -17,11 +18,11 @@ type ComplexHandler struct {
 }
 
 type complexCreateRequest struct {
-	Name      string `json:"name"`
-	Address   string `json:"address"`
-	City      string `json:"city"`
-	Status    string `json:"status"`
-	Threshold int    `json:"threshold_n"`
+	Name      string         `json:"name"`
+	Address   sql.NullString `json:"address"`
+	City      string         `json:"city"`
+	Status    string         `json:"status"`
+	Threshold int            `json:"threshold_n"`
 }
 
 type statusUpdateRequest struct {

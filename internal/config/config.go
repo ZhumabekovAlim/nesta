@@ -22,7 +22,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		Port:               getEnv("PORT", "8080"),
-		DatabaseURL:        getEnv("DB_URL", "postgres://nesta:nesta@postgres:5432/nesta?sslmode=disable"),
+		DatabaseURL:        getEnv("DB_URL", "postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta"),
 		Env:                getEnv("APP_ENV", "development"),
 		JWTSecret:          getEnv("JWT_SECRET", "dev-secret"),
 		AccessTokenTTL:     getDurationEnv("ACCESS_TOKEN_TTL", 15*time.Minute),

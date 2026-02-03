@@ -10,7 +10,7 @@ import (
 type ResidentialComplex struct {
 	ID              string
 	Name            string
-	Address         string
+	Address         sql.NullString
 	City            string
 	Status          string
 	Threshold       int
@@ -35,11 +35,6 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 		args = append(args, "%"+strings.ToLower(search)+"%")
 		idx++
 	}
-	if status != "" {
-		filters = append(filters, "status = $"+itoa(idx))
-		args = append(args, status)
-		idx++
-	}
 	if city != "" {
 		filters = append(filters, "city = $"+itoa(idx))
 		args = append(args, city)
@@ -47,11 +42,14 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 	}
 	if onlyActive {
 		filters = append(filters, "status = 'ACTIVE'")
+	} else if status != "" {
+		filters = append(filters, "status = $"+itoa(idx))
+		args = append(args, status)
+		idx++
 	}
 
 	query := `SELECT id, name, address, city, status, threshold_n, current_requests FROM residential_complexes WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
 	args = append(args, limit, offset)
-
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -71,6 +69,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 
 func (r *ComplexRepository) Get(ctx context.Context, id string) (ResidentialComplex, error) {
 	var item ResidentialComplex
+
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, name, address, city, status, threshold_n, current_requests
 		FROM residential_complexes
