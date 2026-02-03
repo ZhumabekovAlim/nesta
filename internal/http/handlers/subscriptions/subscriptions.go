@@ -20,6 +20,7 @@ type Handler struct {
 type createRequest struct {
 	PlanID       string         `json:"plan_id"`
 	ComplexID    string         `json:"complex_id"`
+	AddressName  string         `json:"address_name"`
 	Address      map[string]any `json:"address_json"`
 	TimeWindow   string         `json:"time_window"`
 	Instructions string         `json:"instructions"`
@@ -48,7 +49,12 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.Service.Create(r.Context(), userID, req.ComplexID, req.PlanID, addressRaw, req.TimeWindow, req.Instructions)
+	if strings.TrimSpace(req.AddressName) == "" {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "address name required", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	result, err := h.Service.Create(r.Context(), userID, req.ComplexID, req.PlanID, strings.TrimSpace(req.AddressName), addressRaw, req.TimeWindow, req.Instructions)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return

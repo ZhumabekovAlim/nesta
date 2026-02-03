@@ -12,6 +12,7 @@ type Subscription struct {
 	ComplexID          string
 	PlanID             string
 	Status             string
+	AddressName        string
 	AddressJSON        []byte
 	TimeWindow         sql.NullString
 	Instructions       sql.NullString
@@ -31,16 +32,16 @@ func NewSubscriptionRepository(db *sql.DB) *SubscriptionRepository {
 func (r *SubscriptionRepository) Create(ctx context.Context, sub Subscription) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO subscriptions (
-			id, user_id, complex_id, plan_id, status, address_json, time_window, instructions, current_period_start, current_period_end
+			id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, sub.ID, sub.UserID, sub.ComplexID, sub.PlanID, sub.Status, sub.AddressJSON, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, sub.ID, sub.UserID, sub.ComplexID, sub.PlanID, sub.Status, sub.AddressName, sub.AddressJSON, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	return err
 }
 
 func (r *SubscriptionRepository) ListByUser(ctx context.Context, userID string) ([]Subscription, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, user_id, complex_id, plan_id, status, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+		SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
 		FROM subscriptions
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -53,7 +54,7 @@ func (r *SubscriptionRepository) ListByUser(ctx context.Context, userID string) 
 	var subs []Subscription
 	for rows.Next() {
 		var sub Subscription
-		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); err != nil {
+		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); err != nil {
 			return nil, err
 		}
 		subs = append(subs, sub)
@@ -70,7 +71,7 @@ func (r *SubscriptionRepository) UpdateStatus(ctx context.Context, id, status st
 
 func (r *SubscriptionRepository) ListAll(ctx context.Context) ([]Subscription, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, user_id, complex_id, plan_id, status, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+		SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
 		FROM subscriptions
 		ORDER BY created_at DESC
 	`)
@@ -82,7 +83,7 @@ func (r *SubscriptionRepository) ListAll(ctx context.Context) ([]Subscription, e
 	var subs []Subscription
 	for rows.Next() {
 		var sub Subscription
-		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); err != nil {
+		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); err != nil {
 			return nil, err
 		}
 		subs = append(subs, sub)
@@ -93,9 +94,9 @@ func (r *SubscriptionRepository) ListAll(ctx context.Context) ([]Subscription, e
 func (r *SubscriptionRepository) Get(ctx context.Context, id string) (Subscription, error) {
 	var sub Subscription
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, complex_id, plan_id, status, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+		SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
 		FROM subscriptions
 		WHERE id = $1
-	`, id).Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt)
+	`, id).Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt)
 	return sub, err
 }
