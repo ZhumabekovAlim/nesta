@@ -15,12 +15,17 @@ type SubscriptionService struct {
 	Plans         *repositories.PlanRepository
 }
 
+type SubscriptionAddress struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+}
+
 type SubscriptionCreateResult struct {
 	Subscription    repositories.Subscription
 	RequiresPayment bool
 }
 
-func (s *SubscriptionService) Create(ctx context.Context, userID, complexID, planID string, address []byte, timeWindow, instructions string) (SubscriptionCreateResult, error) {
+func (s *SubscriptionService) Create(ctx context.Context, userID, complexID, planID string, addressName string, address []byte, timeWindow, instructions string) (SubscriptionCreateResult, error) {
 	complex, err := s.Complexes.Get(ctx, complexID)
 	if err != nil {
 		return SubscriptionCreateResult{}, err
@@ -54,6 +59,7 @@ func (s *SubscriptionService) Create(ctx context.Context, userID, complexID, pla
 		ComplexID:   complexID,
 		PlanID:      planID,
 		Status:      status,
+		AddressName: addressName,
 		AddressJSON: address,
 	}
 
