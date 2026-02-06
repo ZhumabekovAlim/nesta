@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"nesta/internal/http/handlers"
+	addressHandlers "nesta/internal/http/handlers/addresses"
 	adminHandlers "nesta/internal/http/handlers/admin"
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
@@ -27,6 +28,7 @@ type Dependencies struct {
 	Complexes      apiHandlers.ComplexHandler
 	Plans          apiHandlers.PlanHandler
 	Pickups        apiHandlers.PickupHandler
+	Addresses      addressHandlers.Handler
 	Subscriptions  subscriptionHandlers.Handler
 	Users          userHandlers.Handler
 	Products       storeHandlers.ProductHandler
@@ -57,6 +59,8 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/auth/logout", deps.Auth.Logout)
 
 	mux.Handle("/api/v1/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.Me)))
+	mux.Handle("/api/v1/addresses", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Addresses.HandleCollection)))
+	mux.Handle("/api/v1/addresses/", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Addresses.HandleItem)))
 	mux.Handle("/api/v1/subscriptions", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.Create)))
 	mux.Handle("/api/v1/subscriptions/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.ListMine)))
 	mux.Handle("/api/v1/subscriptions/", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Subscriptions.Update)))

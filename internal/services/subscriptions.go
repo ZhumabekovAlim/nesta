@@ -11,6 +11,7 @@ import (
 
 type SubscriptionService struct {
 	Subscriptions *repositories.SubscriptionRepository
+	Addresses     *repositories.AddressRepository
 	Complexes     *repositories.ComplexRepository
 	Plans         *repositories.PlanRepository
 }
@@ -20,8 +21,16 @@ type SubscriptionCreateResult struct {
 	RequiresPayment bool
 }
 
-func (s *SubscriptionService) Create(ctx context.Context, userID, complexID, planID string, address []byte, timeWindow, instructions string) (SubscriptionCreateResult, error) {
-	complex, err := s.Complexes.Get(ctx, complexID)
+func (s *SubscriptionService) Create(ctx context.Context, userID, addressID, planID string, timeWindow, instructions string) (SubscriptionCreateResult, error) {
+	address, err := s.Addresses.Get(ctx, addressID)
+	if err != nil {
+		return SubscriptionCreateResult{}, err
+	}
+	if address.UserID != userID {
+		return SubscriptionCreateResult{}, errors.New("address not found")
+	}
+
+	complex, err := s.Complexes.Get(ctx, address.ComplexID)
 	if err != nil {
 		return SubscriptionCreateResult{}, err
 	}
@@ -51,10 +60,12 @@ func (s *SubscriptionService) Create(ctx context.Context, userID, complexID, pla
 	subscription := repositories.Subscription{
 		ID:          id,
 		UserID:      userID,
-		ComplexID:   complexID,
+		AddressID:   addressID,
 		PlanID:      planID,
 		Status:      status,
-		AddressJSON: address,
+		AddressName: address.Name,
+		AddressJSON: address.AddressJSON,
+		ComplexID:   address.ComplexID,
 	}
 
 	if timeWindow != "" {

@@ -12,6 +12,7 @@ import (
 
 	"nesta/internal/config"
 	"nesta/internal/http/handlers"
+	addressHandlers "nesta/internal/http/handlers/addresses"
 	adminHandlers "nesta/internal/http/handlers/admin"
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
@@ -49,6 +50,7 @@ func main() {
 	repoComplexes := repositories.NewComplexRepository(store.DB)
 	repoComplexRequests := repositories.NewComplexRequestRepository(store.DB)
 	repoPlans := repositories.NewPlanRepository(store.DB)
+	repoAddresses := repositories.NewAddressRepository(store.DB)
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
 	repoProducts := repositories.NewProductRepository(store.DB)
 	repoOrders := repositories.NewOrderRepository(store.DB)
@@ -74,8 +76,14 @@ func main() {
 		ThresholdStatus: "PLANNED",
 	}
 
+	addressService := &services.AddressService{
+		Addresses: repoAddresses,
+		Complexes: repoComplexes,
+	}
+
 	subscriptionService := &services.SubscriptionService{
 		Subscriptions: repoSubscriptions,
+		Addresses:     repoAddresses,
 		Complexes:     repoComplexes,
 		Plans:         repoPlans,
 	}
@@ -103,6 +111,10 @@ func main() {
 		},
 		Plans:   apiHandlers.PlanHandler{Plans: repoPlans},
 		Pickups: apiHandlers.PickupHandler{Logs: repoPickups},
+		Addresses: addressHandlers.Handler{
+			Service:   addressService,
+			Addresses: repoAddresses,
+		},
 		Subscriptions: subscriptionHandlers.Handler{
 			Service:       subscriptionService,
 			Subscriptions: repoSubscriptions,

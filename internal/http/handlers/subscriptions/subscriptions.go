@@ -1,7 +1,6 @@
 package subscriptions
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -18,11 +17,10 @@ type Handler struct {
 }
 
 type createRequest struct {
-	PlanID       string         `json:"plan_id"`
-	ComplexID    string         `json:"complex_id"`
-	Address      map[string]any `json:"address_json"`
-	TimeWindow   string         `json:"time_window"`
-	Instructions string         `json:"instructions"`
+	PlanID       string `json:"plan_id"`
+	AddressID    string `json:"address_id"`
+	TimeWindow   string `json:"time_window"`
+	Instructions string `json:"instructions"`
 }
 
 type actionRequest struct {
@@ -42,13 +40,12 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addressRaw, err := json.Marshal(req.Address)
-	if err != nil {
-		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid address", RequestID: middleware.GetRequestID(r.Context())})
+	if strings.TrimSpace(req.AddressID) == "" {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "address required", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
 
-	result, err := h.Service.Create(r.Context(), userID, req.ComplexID, req.PlanID, addressRaw, req.TimeWindow, req.Instructions)
+	result, err := h.Service.Create(r.Context(), userID, strings.TrimSpace(req.AddressID), req.PlanID, req.TimeWindow, req.Instructions)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return
