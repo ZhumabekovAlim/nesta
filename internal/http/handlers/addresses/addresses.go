@@ -206,6 +206,7 @@ func suggestionPayload(item repositories.AddressSuggestion) map[string]any {
 	payload := map[string]any{
 		"id":         item.ID,
 		"name":       item.Name,
+		"address":    item.Address,
 		"complex_id": item.ComplexID,
 		"complex": map[string]any{
 			"id":      item.ComplexID,
@@ -217,15 +218,5 @@ func suggestionPayload(item repositories.AddressSuggestion) map[string]any {
 			},
 		},
 	}
-	if len(item.AddressJSON) == 0 {
-		payload["address_json"] = nil
-		return payload
-	}
-	var raw any
-	if err := json.Unmarshal(item.AddressJSON, &raw); err != nil {
-		payload["address_json"] = nil
-		return payload
-	}
-	payload["address_json"] = raw
 	return payload
 }

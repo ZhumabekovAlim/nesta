@@ -81,36 +81,33 @@ func (r *AddressRepository) Update(ctx context.Context, address Address) (int64,
 type AddressSuggestion struct {
 	ID          string
 	Name        string
+	Address     string
 	ComplexID   string
 	ComplexName string
 	ComplexAddr string
 	CityID      string
 	CityName    string
-	AddressJSON []byte
 }
 
 func (r *AddressRepository) Search(ctx context.Context, cityID, query string, limit int) ([]AddressSuggestion, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
-			a.id,
-			a.name,
-			a.complex_id,
+			c.id,
+			c.name,
+			c.address,
+			c.id,
 			c.name,
 			c.address,
 			c.city_id,
-			cities.name,
-			a.address_json
-		FROM addresses a
-		JOIN residential_complexes c ON c.id = a.complex_id
+			cities.name
+		FROM residential_complexes c
 		JOIN cities ON cities.id = c.city_id
-		WHERE ($1 = '' OR a.city_id = $1)
+		WHERE ($1 = '' OR c.city_id = $1)
 			AND (
-				LOWER(a.name) LIKE $2
-				OR LOWER(COALESCE(a.address_json->>'address', '')) LIKE $2
-				OR LOWER(COALESCE(c.name, '')) LIKE $2
+				LOWER(COALESCE(c.name, '')) LIKE $2
 				OR LOWER(COALESCE(c.address, '')) LIKE $2
 			)
-		ORDER BY a.created_at DESC
+		ORDER BY c.name
 		LIMIT $3
 	`, cityID, "%"+strings.ToLower(query)+"%", limit)
 	if err != nil {
@@ -121,7 +118,7 @@ func (r *AddressRepository) Search(ctx context.Context, cityID, query string, li
 	var items []AddressSuggestion
 	for rows.Next() {
 		var item AddressSuggestion
-		if err := rows.Scan(&item.ID, &item.Name, &item.ComplexID, &item.ComplexName, &item.ComplexAddr, &item.CityID, &item.CityName, &item.AddressJSON); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.ComplexID, &item.ComplexName, &item.ComplexAddr, &item.CityID, &item.CityName); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
