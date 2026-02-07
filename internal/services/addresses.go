@@ -47,9 +47,6 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 	if err != nil {
 		return repositories.Address{}, err
 	}
-	if complex.Status != "ACTIVE" {
-		return repositories.Address{}, errors.New("complex is not active")
-	}
 	if complex.CityID != input.CityID {
 		return repositories.Address{}, errors.New("complex not in city")
 	}
@@ -113,9 +110,6 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 	complex, err := s.Complexes.Get(ctx, input.ComplexID)
 	if err != nil {
 		return err
-	}
-	if complex.Status != "ACTIVE" {
-		return errors.New("complex is not active")
 	}
 	if complex.CityID != input.CityID {
 		return errors.New("complex not in city")
