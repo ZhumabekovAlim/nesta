@@ -11,11 +11,13 @@ import (
 type AddressService struct {
 	Addresses *repositories.AddressRepository
 	Complexes *repositories.ComplexRepository
+	Cities    *repositories.CityRepository
 }
 
 type AddressInput struct {
 	Name      string
 	ComplexID string
+	CityID    string
 	Address   map[string]any
 }
 
@@ -26,8 +28,19 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 	if input.ComplexID == "" {
 		return repositories.Address{}, errors.New("complex required")
 	}
+	if input.CityID == "" {
+		return repositories.Address{}, errors.New("city required")
+	}
 	if input.Address == nil {
 		return repositories.Address{}, errors.New("address required")
+	}
+
+	city, err := s.Cities.Get(ctx, input.CityID)
+	if err != nil {
+		return repositories.Address{}, err
+	}
+	if !city.IsActive {
+		return repositories.Address{}, errors.New("city is not active")
 	}
 
 	complex, err := s.Complexes.Get(ctx, input.ComplexID)
@@ -36,6 +49,9 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 	}
 	if complex.Status != "ACTIVE" {
 		return repositories.Address{}, errors.New("complex is not active")
+	}
+	if complex.CityID != input.CityID {
+		return repositories.Address{}, errors.New("complex not in city")
 	}
 
 	raw, err := json.Marshal(input.Address)
@@ -53,6 +69,7 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 		UserID:      userID,
 		Name:        input.Name,
 		ComplexID:   input.ComplexID,
+		CityID:      input.CityID,
 		AddressJSON: raw,
 	}
 
@@ -70,6 +87,9 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 	if input.ComplexID == "" {
 		return errors.New("complex required")
 	}
+	if input.CityID == "" {
+		return errors.New("city required")
+	}
 	if input.Address == nil {
 		return errors.New("address required")
 	}
@@ -82,12 +102,23 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 		return errors.New("address not found")
 	}
 
+	city, err := s.Cities.Get(ctx, input.CityID)
+	if err != nil {
+		return err
+	}
+	if !city.IsActive {
+		return errors.New("city is not active")
+	}
+
 	complex, err := s.Complexes.Get(ctx, input.ComplexID)
 	if err != nil {
 		return err
 	}
 	if complex.Status != "ACTIVE" {
 		return errors.New("complex is not active")
+	}
+	if complex.CityID != input.CityID {
+		return errors.New("complex not in city")
 	}
 
 	raw, err := json.Marshal(input.Address)
@@ -100,6 +131,7 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 		UserID:      userID,
 		Name:        input.Name,
 		ComplexID:   input.ComplexID,
+		CityID:      input.CityID,
 		AddressJSON: raw,
 	})
 	return err

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -11,6 +12,7 @@ type Address struct {
 	UserID      string
 	Name        string
 	ComplexID   string
+	CityID      string
 	AddressJSON []byte
 	CreatedAt   time.Time
 }
@@ -25,15 +27,15 @@ func NewAddressRepository(db *sql.DB) *AddressRepository {
 
 func (r *AddressRepository) Create(ctx context.Context, address Address) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO addresses (id, user_id, name, complex_id, address_json)
-		VALUES ($1, $2, $3, $4, $5)
-	`, address.ID, address.UserID, address.Name, address.ComplexID, address.AddressJSON)
+		INSERT INTO addresses (id, user_id, name, complex_id, city_id, address_json)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, address.ID, address.UserID, address.Name, address.ComplexID, address.CityID, address.AddressJSON)
 	return err
 }
 
 func (r *AddressRepository) ListByUser(ctx context.Context, userID string) ([]Address, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, user_id, name, complex_id, address_json, created_at
+		SELECT id, user_id, name, complex_id, city_id, address_json, created_at
 		FROM addresses
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -46,7 +48,7 @@ func (r *AddressRepository) ListByUser(ctx context.Context, userID string) ([]Ad
 	var items []Address
 	for rows.Next() {
 		var address Address
-		if err := rows.Scan(&address.ID, &address.UserID, &address.Name, &address.ComplexID, &address.AddressJSON, &address.CreatedAt); err != nil {
+		if err := rows.Scan(&address.ID, &address.UserID, &address.Name, &address.ComplexID, &address.CityID, &address.AddressJSON, &address.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, address)
@@ -57,23 +59,74 @@ func (r *AddressRepository) ListByUser(ctx context.Context, userID string) ([]Ad
 func (r *AddressRepository) Get(ctx context.Context, id string) (Address, error) {
 	var address Address
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, name, complex_id, address_json, created_at
+		SELECT id, user_id, name, complex_id, city_id, address_json, created_at
 		FROM addresses
 		WHERE id = $1
-	`, id).Scan(&address.ID, &address.UserID, &address.Name, &address.ComplexID, &address.AddressJSON, &address.CreatedAt)
+	`, id).Scan(&address.ID, &address.UserID, &address.Name, &address.ComplexID, &address.CityID, &address.AddressJSON, &address.CreatedAt)
 	return address, err
 }
 
 func (r *AddressRepository) Update(ctx context.Context, address Address) (int64, error) {
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE addresses
-		SET name = $3, complex_id = $4, address_json = $5
+		SET name = $3, complex_id = $4, city_id = $5, address_json = $6
 		WHERE id = $1 AND user_id = $2
-	`, address.ID, address.UserID, address.Name, address.ComplexID, address.AddressJSON)
+	`, address.ID, address.UserID, address.Name, address.ComplexID, address.CityID, address.AddressJSON)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+type AddressSuggestion struct {
+	ID          string
+	Name        string
+	ComplexID   string
+	ComplexName string
+	ComplexAddr string
+	CityID      string
+	CityName    string
+	AddressJSON []byte
+}
+
+func (r *AddressRepository) Search(ctx context.Context, cityID, query string, limit int) ([]AddressSuggestion, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			a.id,
+			a.name,
+			a.complex_id,
+			c.name,
+			c.address,
+			c.city_id,
+			cities.name,
+			a.address_json
+		FROM addresses a
+		JOIN residential_complexes c ON c.id = a.complex_id
+		JOIN cities ON cities.id = c.city_id
+		WHERE ($1 = '' OR a.city_id = $1)
+			AND (
+				LOWER(a.name) LIKE $2
+				OR LOWER(COALESCE(a.address_json->>'address', '')) LIKE $2
+				OR LOWER(COALESCE(c.name, '')) LIKE $2
+				OR LOWER(COALESCE(c.address, '')) LIKE $2
+			)
+		ORDER BY a.created_at DESC
+		LIMIT $3
+	`, cityID, "%"+strings.ToLower(query)+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []AddressSuggestion
+	for rows.Next() {
+		var item AddressSuggestion
+		if err := rows.Scan(&item.ID, &item.Name, &item.ComplexID, &item.ComplexName, &item.ComplexAddr, &item.CityID, &item.CityName, &item.AddressJSON); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *AddressRepository) Delete(ctx context.Context, id, userID string) (int64, error) {

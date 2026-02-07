@@ -49,6 +49,7 @@ func main() {
 	repoRefresh := repositories.NewRefreshTokenRepository(store.DB)
 	repoComplexes := repositories.NewComplexRepository(store.DB)
 	repoComplexRequests := repositories.NewComplexRequestRepository(store.DB)
+	repoCities := repositories.NewCityRepository(store.DB)
 	repoPlans := repositories.NewPlanRepository(store.DB)
 	repoAddresses := repositories.NewAddressRepository(store.DB)
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
@@ -79,6 +80,7 @@ func main() {
 	addressService := &services.AddressService{
 		Addresses: repoAddresses,
 		Complexes: repoComplexes,
+		Cities:    repoCities,
 	}
 
 	subscriptionService := &services.SubscriptionService{
@@ -109,6 +111,7 @@ func main() {
 			Service:   complexService,
 			JWTSecret: cfg.JWTSecret,
 		},
+		Cities:  apiHandlers.CityHandler{Cities: repoCities},
 		Plans:   apiHandlers.PlanHandler{Plans: repoPlans},
 		Pickups: apiHandlers.PickupHandler{Logs: repoPickups},
 		Addresses: addressHandlers.Handler{
@@ -123,7 +126,7 @@ func main() {
 		Products:       storeHandlers.ProductHandler{Products: repoProducts},
 		Orders:         storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
 		Payments:       paymentHandlers.Handler{Payments: paymentService},
-		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Service: complexService},
+		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Cities: repoCities, Service: complexService},
 		AdminPlans:     adminHandlers.PlanHandler{Plans: repoPlans},
 		AdminSubs:      adminHandlers.SubscriptionHandler{Subscriptions: repoSubscriptions, Service: subscriptionService},
 		AdminProducts:  adminHandlers.ProductHandler{Products: repoProducts},

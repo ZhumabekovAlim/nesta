@@ -13,13 +13,14 @@ import (
 
 type ComplexHandler struct {
 	Complexes *repositories.ComplexRepository
+	Cities    *repositories.CityRepository
 	Service   *services.ComplexService
 }
 
 type complexCreateRequest struct {
 	Name      string `json:"name"`
 	Address   string `json:"address"`
-	City      string `json:"city"`
+	CityID    string `json:"city_id"`
 	Status    string `json:"status"`
 	Threshold int    `json:"threshold_n"`
 }
@@ -65,11 +66,18 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ID:              id,
 		Name:            req.Name,
 		Address:         req.Address,
-		City:            req.City,
+		CityID:          req.CityID,
 		Status:          req.Status,
 		Threshold:       defaultThreshold(req.Threshold),
 		CurrentRequests: 0,
 	}
+
+	city, err := h.Cities.Get(r.Context(), req.CityID)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid city", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+	complex.City = city.Name
 
 	if err := h.Complexes.Create(r.Context(), complex); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})

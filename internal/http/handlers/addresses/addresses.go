@@ -20,6 +20,7 @@ type Handler struct {
 type addressRequest struct {
 	Name      string         `json:"name"`
 	ComplexID string         `json:"complex_id"`
+	CityID    string         `json:"city_id"`
 	Address   map[string]any `json:"address_json"`
 }
 
@@ -77,6 +78,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	address, err := h.Service.Create(r.Context(), userID, services.AddressInput{
 		Name:      strings.TrimSpace(req.Name),
 		ComplexID: strings.TrimSpace(req.ComplexID),
+		CityID:    strings.TrimSpace(req.CityID),
 		Address:   req.Address,
 	})
 	if err != nil {
@@ -109,6 +111,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := h.Service.Update(r.Context(), userID, id, services.AddressInput{
 		Name:      strings.TrimSpace(req.Name),
 		ComplexID: strings.TrimSpace(req.ComplexID),
+		CityID:    strings.TrimSpace(req.CityID),
 		Address:   req.Address,
 	}); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
@@ -144,6 +147,23 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func (h Handler) Search(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "query required", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	cityID := strings.TrimSpace(r.URL.Query().Get("city_id"))
+	items, err := h.Addresses.Search(r.Context(), cityID, query, 10)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to search", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"items": suggestionList(items)})
+}
+
 func jsonRawList(items []repositories.Address) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
@@ -158,6 +178,7 @@ func jsonRaw(address repositories.Address) map[string]any {
 		"user_id":    address.UserID,
 		"name":       address.Name,
 		"complex_id": address.ComplexID,
+		"city_id":    address.CityID,
 		"created_at": address.CreatedAt,
 	}
 	if len(address.AddressJSON) == 0 {
@@ -166,6 +187,42 @@ func jsonRaw(address repositories.Address) map[string]any {
 	}
 	var raw any
 	if err := json.Unmarshal(address.AddressJSON, &raw); err != nil {
+		payload["address_json"] = nil
+		return payload
+	}
+	payload["address_json"] = raw
+	return payload
+}
+
+func suggestionList(items []repositories.AddressSuggestion) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, suggestionPayload(item))
+	}
+	return out
+}
+
+func suggestionPayload(item repositories.AddressSuggestion) map[string]any {
+	payload := map[string]any{
+		"id":         item.ID,
+		"name":       item.Name,
+		"complex_id": item.ComplexID,
+		"complex": map[string]any{
+			"id":      item.ComplexID,
+			"name":    item.ComplexName,
+			"address": item.ComplexAddr,
+			"city": map[string]any{
+				"id":   item.CityID,
+				"name": item.CityName,
+			},
+		},
+	}
+	if len(item.AddressJSON) == 0 {
+		payload["address_json"] = nil
+		return payload
+	}
+	var raw any
+	if err := json.Unmarshal(item.AddressJSON, &raw); err != nil {
 		payload["address_json"] = nil
 		return payload
 	}
