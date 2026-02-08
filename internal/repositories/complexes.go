@@ -59,47 +59,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, cityID str
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		legacyFilters := []string{"1=1"}
-		legacyArgs := []any{}
-		legacyIdx := 1
-
-		if search != "" {
-			legacyFilters = append(legacyFilters, "(LOWER(name) LIKE $"+itoa(legacyIdx)+" OR LOWER(COALESCE(address, '')) LIKE $"+itoa(legacyIdx)+")")
-			legacyArgs = append(legacyArgs, "%"+strings.ToLower(search)+"%")
-			legacyIdx++
-		}
-		if status != "" {
-			legacyFilters = append(legacyFilters, "status = $"+itoa(legacyIdx))
-			legacyArgs = append(legacyArgs, status)
-			legacyIdx++
-		}
-		if cityID != "" {
-			legacyFilters = append(legacyFilters, "city = $"+itoa(legacyIdx))
-			legacyArgs = append(legacyArgs, cityID)
-			legacyIdx++
-		}
-		if onlyActive {
-			legacyFilters = append(legacyFilters, "status = 'ACTIVE'")
-		}
-
-		legacyQuery := `SELECT id, name, address, city, status, threshold_n, current_requests FROM residential_complexes WHERE ` + strings.Join(legacyFilters, " AND ") + ` ORDER BY name LIMIT $` + itoa(legacyIdx) + ` OFFSET $` + itoa(legacyIdx+1)
-		legacyArgs = append(legacyArgs, limit, offset)
-
-		rows, err = r.db.QueryContext(ctx, legacyQuery, legacyArgs...)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		var complexes []ResidentialComplex
-		for rows.Next() {
-			var item ResidentialComplex
-			if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests); err != nil {
-				return nil, err
-			}
-			complexes = append(complexes, item)
-		}
-		return complexes, rows.Err()
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -122,15 +82,6 @@ func (r *ComplexRepository) Get(ctx context.Context, id string) (ResidentialComp
 		JOIN cities ON cities.id = complexes.city_id
 		WHERE complexes.id = $1
 	`, id).Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.CityID, &item.Status, &item.Threshold, &item.CurrentRequests)
-	if err == nil {
-		return item, nil
-	}
-
-	err = r.db.QueryRowContext(ctx, `
-		SELECT id, name, address, city, status, threshold_n, current_requests
-		FROM residential_complexes
-		WHERE id = $1
-	`, id).Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests)
 	return item, err
 }
 
