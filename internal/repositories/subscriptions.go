@@ -62,7 +62,26 @@ func (r *SubscriptionRepository) ListByUser(ctx context.Context, userID string) 
 		ORDER BY s.created_at DESC
 	`, userID)
 	if err != nil {
-		return nil, err
+		legacyRows, legacyErr := r.db.QueryContext(ctx, `
+			SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+			FROM subscriptions
+			WHERE user_id = $1
+			ORDER BY created_at DESC
+		`, userID)
+		if legacyErr != nil {
+			return nil, err
+		}
+		defer legacyRows.Close()
+
+		var subs []Subscription
+		for legacyRows.Next() {
+			var sub Subscription
+			if scanErr := legacyRows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); scanErr != nil {
+				return nil, scanErr
+			}
+			subs = append(subs, sub)
+		}
+		return subs, legacyRows.Err()
 	}
 	defer rows.Close()
 
@@ -105,7 +124,25 @@ func (r *SubscriptionRepository) ListAll(ctx context.Context) ([]Subscription, e
 		ORDER BY s.created_at DESC
 	`)
 	if err != nil {
-		return nil, err
+		legacyRows, legacyErr := r.db.QueryContext(ctx, `
+			SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+			FROM subscriptions
+			ORDER BY created_at DESC
+		`)
+		if legacyErr != nil {
+			return nil, err
+		}
+		defer legacyRows.Close()
+
+		var subs []Subscription
+		for legacyRows.Next() {
+			var sub Subscription
+			if scanErr := legacyRows.Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); scanErr != nil {
+				return nil, scanErr
+			}
+			subs = append(subs, sub)
+		}
+		return subs, legacyRows.Err()
 	}
 	defer rows.Close()
 
@@ -141,5 +178,14 @@ func (r *SubscriptionRepository) Get(ctx context.Context, id string) (Subscripti
 		JOIN addresses a ON a.id = s.address_id
 		WHERE s.id = $1
 	`, id).Scan(&sub.ID, &sub.UserID, &sub.AddressID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.ComplexID, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt)
+	if err == nil {
+		return sub, nil
+	}
+
+	err = r.db.QueryRowContext(ctx, `
+		SELECT id, user_id, complex_id, plan_id, status, address_name, address_json, time_window, instructions, current_period_start, current_period_end, created_at
+		FROM subscriptions
+		WHERE id = $1
+	`, id).Scan(&sub.ID, &sub.UserID, &sub.ComplexID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt)
 	return sub, err
 }
