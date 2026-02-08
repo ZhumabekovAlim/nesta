@@ -121,6 +121,7 @@ func main() {
 		Subscriptions: subscriptionHandlers.Handler{
 			Service:       subscriptionService,
 			Subscriptions: repoSubscriptions,
+			Addresses:     repoAddresses,
 		},
 		Users:          userHandlers.Handler{Users: repoUsers},
 		Products:       storeHandlers.ProductHandler{Products: repoProducts},

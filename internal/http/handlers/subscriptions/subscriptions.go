@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 type Handler struct {
 	Service       *services.SubscriptionService
 	Subscriptions *repositories.SubscriptionRepository
+	Addresses     *repositories.AddressRepository
 }
 
 type createRequest struct {
@@ -64,13 +66,50 @@ func (h Handler) ListMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addresses, err := h.Addresses.ListByUser(r.Context(), userID)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to list", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
 	subs, err := h.Subscriptions.ListByUser(r.Context(), userID)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to list", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
 
-	response.JSON(w, http.StatusOK, map[string]any{"items": subs})
+	subByAddress := make(map[string]repositories.Subscription, len(subs))
+	for _, sub := range subs {
+		subByAddress[sub.AddressID] = sub
+	}
+
+	items := make([]map[string]any, 0, len(addresses))
+	for _, address := range addresses {
+		var addressPayload any
+		if len(address.AddressJSON) > 0 {
+			if err := json.Unmarshal(address.AddressJSON, &addressPayload); err != nil {
+				addressPayload = nil
+			}
+		}
+		entry := map[string]any{
+			"address": map[string]any{
+				"id":           address.ID,
+				"user_id":      address.UserID,
+				"name":         address.Name,
+				"complex_id":   address.ComplexID,
+				"city_id":      address.CityID,
+				"address_json": addressPayload,
+				"created_at":   address.CreatedAt,
+			},
+			"subscription": nil,
+		}
+		if sub, ok := subByAddress[address.ID]; ok {
+			entry["subscription"] = sub
+		}
+		items = append(items, entry)
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
