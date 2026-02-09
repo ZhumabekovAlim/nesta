@@ -23,24 +23,26 @@ type Server struct {
 }
 
 type Dependencies struct {
-	Health         handlers.HealthHandler
-	Auth           authHandlers.Handler
-	Complexes      apiHandlers.ComplexHandler
-	Cities         apiHandlers.CityHandler
-	Plans          apiHandlers.PlanHandler
-	Pickups        apiHandlers.PickupHandler
-	Addresses      addressHandlers.Handler
-	Subscriptions  subscriptionHandlers.Handler
-	Users          userHandlers.Handler
-	Products       storeHandlers.ProductHandler
-	Orders         storeHandlers.OrderHandler
-	Payments       paymentHandlers.Handler
-	AdminComplexes adminHandlers.ComplexHandler
-	AdminPlans     adminHandlers.PlanHandler
-	AdminSubs      adminHandlers.SubscriptionHandler
-	AdminProducts  adminHandlers.ProductHandler
-	AdminOrders    adminHandlers.OrderHandler
-	AdminPickups   adminHandlers.PickupLogHandler
+	Health            handlers.HealthHandler
+	Auth              authHandlers.Handler
+	Complexes         apiHandlers.ComplexHandler
+	Cities            apiHandlers.CityHandler
+	Plans             apiHandlers.PlanHandler
+	SubscriptionTypes apiHandlers.SubscriptionTypeHandler
+	Pickups           apiHandlers.PickupHandler
+	Addresses         addressHandlers.Handler
+	Subscriptions     subscriptionHandlers.Handler
+	Users             userHandlers.Handler
+	Products          storeHandlers.ProductHandler
+	Orders            storeHandlers.OrderHandler
+	Payments          paymentHandlers.Handler
+	AdminComplexes    adminHandlers.ComplexHandler
+	AdminPlans        adminHandlers.PlanHandler
+	AdminSubTypes     adminHandlers.SubscriptionTypeHandler
+	AdminSubs         adminHandlers.SubscriptionHandler
+	AdminProducts     adminHandlers.ProductHandler
+	AdminOrders       adminHandlers.OrderHandler
+	AdminPickups      adminHandlers.PickupLogHandler
 }
 
 func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
@@ -55,6 +57,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/cities", deps.Cities.List)
 
 	mux.HandleFunc("/api/v1/plans", deps.Plans.List)
+	mux.HandleFunc("/api/v1/subscription-types", deps.SubscriptionTypes.List)
 
 	mux.HandleFunc("/api/v1/auth/otp/send", deps.Auth.SendOTP)
 	mux.HandleFunc("/api/v1/auth/otp/verify", deps.Auth.VerifyOTP)
@@ -88,6 +91,8 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.Handle("/api/v1/admin/complexes/", adminAuth(http.HandlerFunc(deps.AdminComplexes.UpdateStatus)))
 	mux.Handle("/api/v1/admin/plans", adminAuth(http.HandlerFunc(deps.AdminPlans.HandleCollection)))
 	mux.Handle("/api/v1/admin/plans/", adminAuth(http.HandlerFunc(deps.AdminPlans.Update)))
+	mux.Handle("/api/v1/admin/subscription-types", adminAuth(http.HandlerFunc(deps.AdminSubTypes.HandleCollection)))
+	mux.Handle("/api/v1/admin/subscription-types/", adminAuth(http.HandlerFunc(deps.AdminSubTypes.Update)))
 	mux.Handle("/api/v1/admin/subscriptions", adminAuth(http.HandlerFunc(deps.AdminSubs.HandleCollection)))
 	mux.Handle("/api/v1/admin/subscriptions/", adminAuth(http.HandlerFunc(deps.AdminSubs.Update)))
 	mux.Handle("/api/v1/admin/products", adminAuth(http.HandlerFunc(deps.AdminProducts.HandleCollection)))
