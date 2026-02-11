@@ -64,7 +64,8 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/auth/refresh", deps.Auth.Refresh)
 	mux.HandleFunc("/api/v1/auth/logout", deps.Auth.Logout)
 
-	mux.Handle("/api/v1/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.Me)))
+	mux.Handle("/api/v1/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.HandleProfile)))
+	mux.Handle("/api/v1/profile", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Users.HandleProfileUpdate)))
 	mux.Handle("/api/v1/addresses", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Addresses.HandleCollection)))
 	mux.Handle("/api/v1/addresses/search", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Addresses.Search)))
 	mux.Handle("/api/v1/addresses/", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Addresses.HandleItem)))
