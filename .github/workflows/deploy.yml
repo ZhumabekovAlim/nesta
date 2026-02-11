@@ -32,8 +32,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE }}
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/zhumabekovalim/nesta:latest
+            ghcr.io/zhumabekovalim/nesta:${{ github.sha }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -50,7 +50,7 @@ jobs:
             ${{ secrets.APP_ENV }}
             EOF
 
-            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository }}:latest
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u zhumabekovalim --password-stdin
+            docker pull ghcr.io/zhumabekovalim/nesta:latest
             docker compose up -d
             docker image prune -f
