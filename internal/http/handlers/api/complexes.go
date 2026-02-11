@@ -50,6 +50,7 @@ func (h ComplexHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/complexes/")
+
 	if id == "" {
 		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
 		return

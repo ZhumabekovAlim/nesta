@@ -16,6 +16,11 @@ type SubscriptionService struct {
 	Plans         *repositories.PlanRepository
 }
 
+type SubscriptionAddress struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+}
+
 type SubscriptionCreateResult struct {
 	Subscription    repositories.Subscription
 	RequiresPayment bool

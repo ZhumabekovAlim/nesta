@@ -13,6 +13,7 @@ type Subscription struct {
 	PlanID             string
 	Status             string
 	AddressName        string
+	AddressName        string
 	AddressJSON        []byte
 	ComplexID          string
 	TimeWindow         sql.NullString

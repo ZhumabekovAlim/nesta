@@ -10,7 +10,7 @@ import (
 type ResidentialComplex struct {
 	ID              string
 	Name            string
-	Address         string
+	Address         sql.NullString
 	City            string
 	CityID          string
 	Status          string
@@ -48,6 +48,10 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, cityID str
 	}
 	if onlyActive {
 		filters = append(filters, "status = 'ACTIVE'")
+	} else if status != "" {
+		filters = append(filters, "status = $"+itoa(idx))
+		args = append(args, status)
+		idx++
 	}
 
 	query := `
@@ -56,7 +60,6 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, cityID str
 		JOIN cities ON cities.id = complexes.city_id
 		WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY complexes.name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
 	args = append(args, limit, offset)
-
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -76,6 +79,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, cityID str
 
 func (r *ComplexRepository) Get(ctx context.Context, id string) (ResidentialComplex, error) {
 	var item ResidentialComplex
+
 	err := r.db.QueryRowContext(ctx, `
 		SELECT complexes.id, complexes.name, complexes.address, cities.name, complexes.city_id, complexes.status, complexes.threshold_n, complexes.current_requests
 		FROM residential_complexes complexes
