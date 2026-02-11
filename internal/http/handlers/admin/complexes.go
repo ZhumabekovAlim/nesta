@@ -66,7 +66,7 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 	complex := repositories.ResidentialComplex{
 		ID:              id,
 		Name:            req.Name,
-		Address:         req.Address,
+		Address:         sql.NullString{String: req.Address, Valid: true},
 		CityID:          req.CityID,
 		Status:          req.Status,
 		Threshold:       defaultThreshold(req.Threshold),
