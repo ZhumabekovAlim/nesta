@@ -21,6 +21,26 @@ type updateProfileRequest struct {
 	DefaultAddress map[string]any `json:"default_address_json"`
 }
 
+func (h Handler) HandleProfile(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.Me(w, r)
+	case http.MethodPatch, http.MethodPut:
+		h.UpdateMe(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h Handler) HandleProfileUpdate(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch, http.MethodPut:
+		h.UpdateMe(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

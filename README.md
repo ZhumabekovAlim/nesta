@@ -319,6 +319,8 @@ GET /api/v1/me
 
 PATCH /api/v1/me (name, email?, default_address_json?)
 
+PATCH /api/v1/profile (name, email?, default_address_json?)
+
 Подписки
 
 POST /api/v1/subscriptions
@@ -744,7 +746,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/me
 ```
 
 ### 3.2. Обновить профиль
-**PATCH /api/v1/me**
+**PATCH /api/v1/me** (или **PATCH /api/v1/profile**)
 
 **Body:**
 ```json
