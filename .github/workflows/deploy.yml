@@ -9,7 +9,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}:latest
+  IMAGE: ghcr.io/zhumabekovalim/nesta
 
 jobs:
   deploy:
