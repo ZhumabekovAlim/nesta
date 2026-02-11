@@ -12,6 +12,7 @@ type ResidentialComplex struct {
 	Name            string
 	Address         sql.NullString
 	City            string
+	CityID          string
 	Status          string
 	Threshold       int
 	CurrentRequests int
@@ -25,7 +26,7 @@ func NewComplexRepository(db *sql.DB) *ComplexRepository {
 	return &ComplexRepository{db: db}
 }
 
-func (r *ComplexRepository) List(ctx context.Context, search, status, city string, onlyActive bool, limit, offset int) ([]ResidentialComplex, error) {
+func (r *ComplexRepository) List(ctx context.Context, search, status, cityID string, onlyActive bool, limit, offset int) ([]ResidentialComplex, error) {
 	filters := []string{"1=1"}
 	args := []any{}
 	idx := 1
@@ -35,9 +36,14 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 		args = append(args, "%"+strings.ToLower(search)+"%")
 		idx++
 	}
-	if city != "" {
-		filters = append(filters, "city = $"+itoa(idx))
-		args = append(args, city)
+	if status != "" {
+		filters = append(filters, "status = $"+itoa(idx))
+		args = append(args, status)
+		idx++
+	}
+	if cityID != "" {
+		filters = append(filters, "city_id = $"+itoa(idx))
+		args = append(args, cityID)
 		idx++
 	}
 	if onlyActive {
@@ -48,7 +54,11 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 		idx++
 	}
 
-	query := `SELECT id, name, address, city, status, threshold_n, current_requests FROM residential_complexes WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
+	query := `
+		SELECT complexes.id, complexes.name, complexes.address, cities.name, complexes.city_id, complexes.status, complexes.threshold_n, complexes.current_requests
+		FROM residential_complexes complexes
+		JOIN cities ON cities.id = complexes.city_id
+		WHERE ` + strings.Join(filters, " AND ") + ` ORDER BY complexes.name LIMIT $` + itoa(idx) + ` OFFSET $` + itoa(idx+1)
 	args = append(args, limit, offset)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -59,7 +69,7 @@ func (r *ComplexRepository) List(ctx context.Context, search, status, city strin
 	var complexes []ResidentialComplex
 	for rows.Next() {
 		var item ResidentialComplex
-		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.CityID, &item.Status, &item.Threshold, &item.CurrentRequests); err != nil {
 			return nil, err
 		}
 		complexes = append(complexes, item)
@@ -71,10 +81,11 @@ func (r *ComplexRepository) Get(ctx context.Context, id string) (ResidentialComp
 	var item ResidentialComplex
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, address, city, status, threshold_n, current_requests
-		FROM residential_complexes
-		WHERE id = $1
-	`, id).Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.Status, &item.Threshold, &item.CurrentRequests)
+		SELECT complexes.id, complexes.name, complexes.address, cities.name, complexes.city_id, complexes.status, complexes.threshold_n, complexes.current_requests
+		FROM residential_complexes complexes
+		JOIN cities ON cities.id = complexes.city_id
+		WHERE complexes.id = $1
+	`, id).Scan(&item.ID, &item.Name, &item.Address, &item.City, &item.CityID, &item.Status, &item.Threshold, &item.CurrentRequests)
 	return item, err
 }
 
@@ -87,9 +98,9 @@ func (r *ComplexRepository) UpdateStatusAndRequests(ctx context.Context, id, sta
 
 func (r *ComplexRepository) Create(ctx context.Context, complex ResidentialComplex) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO residential_complexes (id, name, address, city, status, threshold_n, current_requests)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, complex.ID, complex.Name, complex.Address, complex.City, complex.Status, complex.Threshold, complex.CurrentRequests)
+		INSERT INTO residential_complexes (id, name, address, city, city_id, status, threshold_n, current_requests)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, complex.ID, complex.Name, complex.Address, complex.City, complex.CityID, complex.Status, complex.Threshold, complex.CurrentRequests)
 	return err
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"nesta/internal/config"
 	"nesta/internal/http/handlers"
+	addressHandlers "nesta/internal/http/handlers/addresses"
 	adminHandlers "nesta/internal/http/handlers/admin"
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
@@ -48,7 +49,10 @@ func main() {
 	repoRefresh := repositories.NewRefreshTokenRepository(store.DB)
 	repoComplexes := repositories.NewComplexRepository(store.DB)
 	repoComplexRequests := repositories.NewComplexRequestRepository(store.DB)
+	repoCities := repositories.NewCityRepository(store.DB)
 	repoPlans := repositories.NewPlanRepository(store.DB)
+	repoSubscriptionTypes := repositories.NewSubscriptionTypeRepository(store.DB)
+	repoAddresses := repositories.NewAddressRepository(store.DB)
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
 	repoProducts := repositories.NewProductRepository(store.DB)
 	repoOrders := repositories.NewOrderRepository(store.DB)
@@ -74,8 +78,15 @@ func main() {
 		ThresholdStatus: "PLANNED",
 	}
 
+	addressService := &services.AddressService{
+		Addresses: repoAddresses,
+		Complexes: repoComplexes,
+		Cities:    repoCities,
+	}
+
 	subscriptionService := &services.SubscriptionService{
 		Subscriptions: repoSubscriptions,
+		Addresses:     repoAddresses,
 		Complexes:     repoComplexes,
 		Plans:         repoPlans,
 	}
@@ -101,18 +112,26 @@ func main() {
 			Service:   complexService,
 			JWTSecret: cfg.JWTSecret,
 		},
-		Plans:   apiHandlers.PlanHandler{Plans: repoPlans},
-		Pickups: apiHandlers.PickupHandler{Logs: repoPickups},
+		Cities:            apiHandlers.CityHandler{Cities: repoCities},
+		Plans:             apiHandlers.PlanHandler{Plans: repoPlans},
+		SubscriptionTypes: apiHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},
+		Pickups:           apiHandlers.PickupHandler{Logs: repoPickups},
+		Addresses: addressHandlers.Handler{
+			Service:   addressService,
+			Addresses: repoAddresses,
+		},
 		Subscriptions: subscriptionHandlers.Handler{
 			Service:       subscriptionService,
 			Subscriptions: repoSubscriptions,
+			Addresses:     repoAddresses,
 		},
 		Users:          userHandlers.Handler{Users: repoUsers},
 		Products:       storeHandlers.ProductHandler{Products: repoProducts},
 		Orders:         storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
 		Payments:       paymentHandlers.Handler{Payments: paymentService},
-		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Service: complexService},
+		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Cities: repoCities, Service: complexService},
 		AdminPlans:     adminHandlers.PlanHandler{Plans: repoPlans},
+		AdminSubTypes:  adminHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},
 		AdminSubs:      adminHandlers.SubscriptionHandler{Subscriptions: repoSubscriptions, Service: subscriptionService},
 		AdminProducts:  adminHandlers.ProductHandler{Products: repoProducts},
 		AdminOrders:    adminHandlers.OrderHandler{Orders: repoOrders},

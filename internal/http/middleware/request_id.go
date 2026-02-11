@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog/hlog"
 )
 
@@ -14,7 +13,7 @@ func RequestID(next http.Handler) http.Handler {
 
 func GetRequestID(ctx context.Context) string {
 	id, ok := hlog.IDFromCtx(ctx)
-	if !ok || id == xid.NilID() {
+	if !ok {
 		return ""
 	}
 	return id.String()
