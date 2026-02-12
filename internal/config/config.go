@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,22 @@ type Config struct {
 	OTPRateLimit       time.Duration
 	OTPMaxAttempts     int
 	SubscriptionPolicy string
+	Robokassa          RobokassaConfig
+}
+
+type RobokassaConfig struct {
+	MerchantLogin   string
+	Password1       string
+	Password2       string
+	TestPassword1   string
+	TestPassword2   string
+	IsTest          bool
+	HashAlgorithm   string
+	PaymentURL      string
+	ResultURL       string
+	SuccessURL      string
+	FailURL         string
+	DefaultCurrency string
 }
 
 func Load() Config {
@@ -31,6 +48,20 @@ func Load() Config {
 		OTPRateLimit:       getDurationEnv("OTP_RATE_LIMIT", time.Minute),
 		OTPMaxAttempts:     getIntEnv("OTP_MAX_ATTEMPTS", 5),
 		SubscriptionPolicy: getEnv("SUBSCRIPTION_CANCEL_POLICY", "immediate"),
+		Robokassa: RobokassaConfig{
+			MerchantLogin:   getEnv("ROBOKASSA_MERCHANT_LOGIN", ""),
+			Password1:       getEnv("ROBOKASSA_PASSWORD_1", ""),
+			Password2:       getEnv("ROBOKASSA_PASSWORD_2", ""),
+			TestPassword1:   getEnv("ROBOKASSA_TEST_PASSWORD_1", ""),
+			TestPassword2:   getEnv("ROBOKASSA_TEST_PASSWORD_2", ""),
+			IsTest:          getBoolEnv("ROBOKASSA_IS_TEST", false),
+			HashAlgorithm:   strings.ToUpper(getEnv("ROBOKASSA_HASH_ALGO", "MD5")),
+			PaymentURL:      getEnv("ROBOKASSA_PAYMENT_URL", "https://auth.robokassa.kz/Merchant/Index.aspx"),
+			ResultURL:       getEnv("ROBOKASSA_RESULT_URL", "/api/v1/payments/robokassa/result"),
+			SuccessURL:      getEnv("ROBOKASSA_SUCCESS_URL", "/api/v1/payments/robokassa/success"),
+			FailURL:         getEnv("ROBOKASSA_FAIL_URL", "/api/v1/payments/robokassa/fail"),
+			DefaultCurrency: getEnv("ROBOKASSA_DEFAULT_CURRENCY", "KZT"),
+		},
 	}
 }
 
@@ -64,4 +95,12 @@ func getIntEnv(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func getBoolEnv(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	return value == "1" || value == "true" || value == "yes"
 }

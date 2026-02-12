@@ -953,3 +953,48 @@ curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/me
   "request_id": "..."
 }
 ```
+
+## Robokassa integration
+
+### Environment variables
+
+Required:
+- `ROBOKASSA_MERCHANT_LOGIN`
+- `ROBOKASSA_PASSWORD_1`
+- `ROBOKASSA_PASSWORD_2`
+- `ROBOKASSA_HASH_ALGO` (`MD5` or `SHA256`)
+- `ROBOKASSA_PAYMENT_URL` (example: `https://auth.robokassa.kz/Merchant/Index.aspx`)
+- `ROBOKASSA_RESULT_URL` (`/api/v1/payments/robokassa/result`)
+- `ROBOKASSA_SUCCESS_URL` (`/api/v1/payments/robokassa/success`)
+- `ROBOKASSA_FAIL_URL` (`/api/v1/payments/robokassa/fail`)
+- `ROBOKASSA_DEFAULT_CURRENCY` (default `KZT`)
+
+Optional testing mode:
+- `ROBOKASSA_IS_TEST=true`
+- `ROBOKASSA_TEST_PASSWORD_1`
+- `ROBOKASSA_TEST_PASSWORD_2`
+
+### Endpoints
+
+- `POST /api/v1/payments/robokassa/init` — creates `PENDING` payment and returns Robokassa redirect URL.
+- `POST /api/v1/payments/robokassa/result` — ResultURL callback (source of truth). Validates signature and amount, applies business effect exactly once, returns `OK{InvId}`.
+- `GET|POST /api/v1/payments/robokassa/success` — user redirect endpoint; does not confirm payment.
+- `GET|POST /api/v1/payments/robokassa/fail` — user redirect for failed/canceled payment.
+
+### Robokassa cabinet settings
+
+Set merchant URLs to application public URLs:
+- ResultURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/result`
+- SuccessURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/success`
+- FailURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/fail`
+
+### Local smoke flow
+
+1. Create order/subscription in DB or via API.
+2. Call `POST /api/v1/payments/robokassa/init` with auth token and payload:
+   ```json
+   {"type":"order","entity_id":"<order_id>","description":"Order payment"}
+   ```
+3. Open `payment_url` in browser.
+4. Simulate callback to ResultURL with valid signature and ensure response body is exactly `OK{InvId}`.
+5. Repeat callback with same data and verify idempotent result (`OK{InvId}` and no repeated stock/subscription changes).
