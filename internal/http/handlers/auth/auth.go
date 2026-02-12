@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 
 	"nesta/internal/http/handlers"
@@ -37,9 +38,12 @@ func (h Handler) SendOTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		code := "VALIDATION_ERROR"
 		status := http.StatusBadRequest
-		if err.Error() == "rate limited" {
+		if errors.Is(err, services.ErrRateLimited) || errors.Is(err, services.ErrSMSRateLimited) {
 			code = "RATE_LIMITED"
 			status = http.StatusTooManyRequests
+		} else if errors.Is(err, services.ErrSMSDeliveryError) {
+			code = "UPSTREAM_ERROR"
+			status = http.StatusBadGateway
 		}
 		response.ErrorJSON(w, status, response.Error{Code: code, Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return
