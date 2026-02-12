@@ -81,8 +81,10 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.Handle("/api/v1/orders/me", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Orders.ListMine)))
 	mux.Handle("/api/v1/orders/", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Orders.Get)))
 
-	mux.Handle("/api/v1/payments/init", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Payments.Init)))
-	mux.HandleFunc("/api/v1/payments/webhook/", deps.Payments.Webhook)
+	mux.Handle("/api/v1/payments/robokassa/init", middleware.Auth(jwtSecret)(http.HandlerFunc(deps.Payments.InitRobokassa)))
+	mux.HandleFunc("/api/v1/payments/robokassa/result", deps.Payments.ResultRobokassa)
+	mux.HandleFunc("/api/v1/payments/robokassa/success", deps.Payments.SuccessRobokassa)
+	mux.HandleFunc("/api/v1/payments/robokassa/fail", deps.Payments.FailRobokassa)
 
 	adminAuth := func(handler http.HandlerFunc) http.Handler {
 		return middleware.Auth(jwtSecret)(middleware.RequireRole("admin")(handler))

@@ -56,7 +56,6 @@ func main() {
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
 	repoProducts := repositories.NewProductRepository(store.DB)
 	repoOrders := repositories.NewOrderRepository(store.DB)
-	repoPayments := repositories.NewPaymentRepository(store.DB)
 	repoPickups := repositories.NewPickupLogRepository(store.DB)
 
 	authService := &services.AuthService{
@@ -97,10 +96,8 @@ func main() {
 	}
 
 	paymentService := &services.PaymentService{
-		DB:            store.DB,
-		Payments:      repoPayments,
-		Orders:        repoOrders,
-		Subscriptions: repoSubscriptions,
+		DB:     store.DB,
+		Config: cfg.Robokassa,
 	}
 
 	deps := server.Dependencies{

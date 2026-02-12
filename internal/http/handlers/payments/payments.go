@@ -15,63 +15,93 @@ type Handler struct {
 }
 
 type initRequest struct {
-	Type              string `json:"type"`
-	EntityID          string `json:"entity_id"`
-	Provider          string `json:"provider"`
-	ProviderPaymentID string `json:"provider_payment_id"`
-	AmountCents       int    `json:"amount_cents"`
+	Type        string `json:"type"`
+	EntityID    string `json:"entity_id"`
+	Description string `json:"description"`
 }
 
-type webhookRequest struct {
-	ProviderPaymentID string `json:"provider_payment_id"`
-	Status            string `json:"status"`
-	Payload           any    `json:"payload"`
-}
-
-func (h Handler) Init(w http.ResponseWriter, r *http.Request) {
+func (h Handler) InitRobokassa(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.ErrorJSON(w, http.StatusMethodNotAllowed, response.Error{Code: "METHOD_NOT_ALLOWED", Message: "method not allowed", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.ErrorJSON(w, http.StatusUnauthorized, response.Error{Code: "UNAUTHORIZED", Message: "unauthorized", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
 	var req initRequest
 	if err := handlers.DecodeJSON(r, &req); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
-
-	payment, err := h.Payments.Init(r.Context(), services.PaymentInitRequest{
-		Type:              req.Type,
-		EntityID:          req.EntityID,
-		Provider:          req.Provider,
-		ProviderPaymentID: req.ProviderPaymentID,
-		AmountCents:       req.AmountCents,
+	result, err := h.Payments.InitRobokassa(r.Context(), services.RobokassaInitRequest{
+		Type: req.Type, EntityID: req.EntityID, UserID: userID, Description: req.Description,
 	})
 	if err != nil {
-		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "PAYMENT_INIT_FAILED", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
-
-	response.JSON(w, http.StatusCreated, payment)
+	response.JSON(w, http.StatusCreated, result)
 }
 
-func (h Handler) Webhook(w http.ResponseWriter, r *http.Request) {
-	provider := strings.TrimPrefix(r.URL.Path, "/api/v1/payments/webhook/")
-	if provider == "" {
-		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "provider not found", RequestID: middleware.GetRequestID(r.Context())})
+func (h Handler) ResultRobokassa(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-
-	var req webhookRequest
-	if err := handlers.DecodeJSON(r, &req); err != nil {
-		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
+	shp := map[string]string{}
+	raw := map[string]string{}
+	for key, values := range r.Form {
+		if len(values) == 0 {
+			continue
+		}
+		raw[key] = values[0]
+		if strings.HasPrefix(key, "Shp_") {
+			shp[key] = values[0]
+		}
+	}
+	okBody, err := h.Payments.HandleRobokassaResult(r.Context(), services.RobokassaCallback{
+		OutSum: r.FormValue("OutSum"), InvID: r.FormValue("InvId"), SignatureValue: r.FormValue("SignatureValue"), Shp: shp, RawPayload: raw,
+	})
+	if err != nil {
+		http.Error(w, "bad sign", http.StatusBadRequest)
 		return
 	}
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte(okBody))
+}
 
-	if err := h.Payments.HandleWebhook(r.Context(), services.PaymentWebhook{
-		Provider:          provider,
-		ProviderPaymentID: req.ProviderPaymentID,
-		Status:            req.Status,
-		Payload:           req.Payload,
-	}); err != nil {
-		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "PAYMENT_WEBHOOK_INVALID", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+func (h Handler) SuccessRobokassa(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	shp := extractShp(r)
+	err := h.Payments.VerifySuccessSignature(r.FormValue("OutSum"), r.FormValue("InvId"), r.FormValue("SignatureValue"), shp)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "INVALID_SIGNATURE", Message: "invalid signature", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
+	invID := r.FormValue("InvId")
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Оплата принята, проверяем статус.",
+		"inv_id":  invID,
+	})
+}
 
-	response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (h Handler) FailRobokassa(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	invID := r.FormValue("InvId")
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Платеж отменен или завершился ошибкой.",
+		"inv_id":  invID,
+	})
+}
+
+func extractShp(r *http.Request) map[string]string {
+	shp := map[string]string{}
+	for key, values := range r.Form {
+		if strings.HasPrefix(key, "Shp_") && len(values) > 0 {
+			shp[key] = values[0]
+		}
+	}
+	return shp
 }
