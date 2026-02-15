@@ -23,6 +23,7 @@ import (
 	"nesta/internal/http/server"
 	"nesta/internal/repositories"
 	"nesta/internal/services"
+	"nesta/internal/sms/mobizon"
 	"nesta/internal/storage"
 
 	"github.com/rs/zerolog"
@@ -58,16 +59,29 @@ func main() {
 	repoOrders := repositories.NewOrderRepository(store.DB)
 	repoPickups := repositories.NewPickupLogRepository(store.DB)
 
+	var mobizonClient *mobizon.Client
+	if cfg.OTPDeliveryMode == services.OTPDeliveryModeMobizon || cfg.OTPDeliveryMode == services.OTPDeliveryModeMobizonEcho {
+		mobizonClient, err = mobizon.NewClient(nil, cfg.Mobizon.BaseURL, cfg.Mobizon.APIKey)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to init mobizon client")
+		}
+	}
+
 	authService := &services.AuthService{
-		Users:          repoUsers,
-		OTP:            repoOTP,
-		RefreshTokens:  repoRefresh,
-		JWTSecret:      cfg.JWTSecret,
-		AccessTTL:      cfg.AccessTokenTTL,
-		RefreshTTL:     cfg.RefreshTokenTTL,
-		OTPTTL:         cfg.OTPTTL,
-		OTPRateLimit:   cfg.OTPRateLimit,
-		OTPMaxAttempts: cfg.OTPMaxAttempts,
+		Users:            repoUsers,
+		OTP:              repoOTP,
+		RefreshTokens:    repoRefresh,
+		JWTSecret:        cfg.JWTSecret,
+		AccessTTL:        cfg.AccessTokenTTL,
+		RefreshTTL:       cfg.RefreshTokenTTL,
+		OTPTTL:           cfg.OTPTTL,
+		OTPRateLimit:     cfg.OTPRateLimit,
+		OTPMaxAttempts:   cfg.OTPMaxAttempts,
+		OTPDeliveryMode:  cfg.OTPDeliveryMode,
+		OTPSender:        cfg.Mobizon.Sender,
+		OTPValidityMin:   cfg.Mobizon.Validity,
+		OTPMessagePrefix: cfg.Mobizon.MessagePrefix,
+		SMS:              mobizonClient,
 	}
 
 	complexService := &services.ComplexService{

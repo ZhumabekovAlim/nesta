@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
 
 	"nesta/internal/http/handlers"
 	"nesta/internal/http/middleware"
@@ -27,9 +30,11 @@ type refreshRequest struct {
 }
 
 func (h Handler) SendOTP(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	var req sendOTPRequest
 	if err := handlers.DecodeJSON(r, &req); err != nil {
-		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
+		log.Warn().Err(err).Str("request_id", requestID).Msg("otp send invalid payload")
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: requestID})
 		return
 	}
 
@@ -37,14 +42,19 @@ func (h Handler) SendOTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		code := "VALIDATION_ERROR"
 		status := http.StatusBadRequest
-		if err.Error() == "rate limited" {
+		if errors.Is(err, services.ErrRateLimited) || errors.Is(err, services.ErrSMSRateLimited) {
 			code = "RATE_LIMITED"
 			status = http.StatusTooManyRequests
+		} else if errors.Is(err, services.ErrSMSDeliveryError) {
+			code = "UPSTREAM_ERROR"
+			status = http.StatusBadGateway
 		}
-		response.ErrorJSON(w, status, response.Error{Code: code, Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		log.Warn().Err(err).Str("request_id", requestID).Str("response_code", code).Int("http_status", status).Msg("otp send request failed")
+		response.ErrorJSON(w, status, response.Error{Code: code, Message: err.Error(), RequestID: requestID})
 		return
 	}
 
+	log.Info().Str("request_id", requestID).Bool("dev_code_in_response", result.Code != nil).Msg("otp send request succeeded")
 	response.JSON(w, http.StatusOK, map[string]any{
 		"status":     "sent",
 		"expires_at": result.ExpiresAt,

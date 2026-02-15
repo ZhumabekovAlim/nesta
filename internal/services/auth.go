@@ -8,26 +8,79 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strings"
 	"time"
 
 	"nesta/internal/auth"
 	"nesta/internal/repositories"
+	"nesta/internal/sms/mobizon"
+
+	"github.com/rs/zerolog/log"
 )
 
+const (
+	OTPDeliveryModeDev         = "dev"
+	OTPDeliveryModeMobizon     = "mobizon"
+	OTPDeliveryModeMobizonEcho = "mobizon+echo"
+)
+
+var (
+	ErrPhoneRequired    = errors.New("phone required")
+	ErrPhoneInvalid     = errors.New("invalid phone")
+	ErrRateLimited      = errors.New("rate limited")
+	ErrBlocked          = errors.New("blocked")
+	ErrOTPNotFound      = errors.New("otp not found")
+	ErrOTPExpired       = errors.New("otp expired")
+	ErrInvalidCode      = errors.New("invalid code")
+	ErrSMSRateLimited   = errors.New("sms provider rate limited")
+	ErrSMSDeliveryError = errors.New("sms delivery failed")
+)
+
+var nonDigit = regexp.MustCompile(`\D`)
+
+type userStore interface {
+	FindByPhone(ctx context.Context, phone string) (repositories.User, error)
+	Create(ctx context.Context, user repositories.User) error
+	FindByID(ctx context.Context, id string) (repositories.User, error)
+}
+
+type otpStore interface {
+	LatestByPhone(ctx context.Context, phone string) (repositories.OTPCode, error)
+	Create(ctx context.Context, code repositories.OTPCode) error
+	IncrementAttempts(ctx context.Context, id string, attempts int) error
+	Block(ctx context.Context, id string, until time.Time) error
+}
+
+type refreshTokenStore interface {
+	FindByToken(ctx context.Context, token string) (repositories.RefreshToken, error)
+	Create(ctx context.Context, token repositories.RefreshToken) error
+	Revoke(ctx context.Context, token string, revokedAt time.Time) error
+}
+
+type smsSender interface {
+	SendSMS(ctx context.Context, recipient, text, sender string, validity int) (mobizon.SendSMSResult, error)
+}
+
 type AuthService struct {
-	Users          *repositories.UserRepository
-	OTP            *repositories.OTPRepository
-	RefreshTokens  *repositories.RefreshTokenRepository
-	JWTSecret      string
-	AccessTTL      time.Duration
-	RefreshTTL     time.Duration
-	OTPTTL         time.Duration
-	OTPRateLimit   time.Duration
-	OTPMaxAttempts int
+	Users            userStore
+	OTP              otpStore
+	RefreshTokens    refreshTokenStore
+	JWTSecret        string
+	AccessTTL        time.Duration
+	RefreshTTL       time.Duration
+	OTPTTL           time.Duration
+	OTPRateLimit     time.Duration
+	OTPMaxAttempts   int
+	OTPDeliveryMode  string
+	OTPSender        string
+	OTPValidityMin   int
+	OTPMessagePrefix string
+	SMS              smsSender
 }
 
 type OTPResult struct {
-	Code      string
+	Code      *string
 	ExpiresAt time.Time
 }
 
@@ -38,17 +91,24 @@ type TokenPair struct {
 }
 
 func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, error) {
-	if phone == "" {
-		return OTPResult{}, errors.New("phone required")
+	normalizedPhone, err := NormalizePhone(phone)
+	if err != nil {
+		log.Warn().Err(err).Str("otp_delivery_mode", s.OTPDeliveryMode).Msg("otp send rejected")
+		return OTPResult{}, err
 	}
 
-	latest, err := s.OTP.LatestByPhone(ctx, phone)
+	phoneMasked := MaskPhone(normalizedPhone)
+	log.Info().Str("phone", phoneMasked).Str("otp_delivery_mode", s.OTPDeliveryMode).Msg("otp send requested")
+
+	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
 	if err == nil {
 		if time.Since(latest.CreatedAt) < s.OTPRateLimit {
-			return OTPResult{}, errors.New("rate limited")
+			log.Warn().Str("phone", phoneMasked).Msg("otp send rate limited")
+			return OTPResult{}, ErrRateLimited
 		}
 		if latest.BlockedUntil.Valid && latest.BlockedUntil.Time.After(time.Now()) {
-			return OTPResult{}, errors.New("blocked")
+			log.Warn().Str("phone", phoneMasked).Time("blocked_until", latest.BlockedUntil.Time).Msg("otp send blocked")
+			return OTPResult{}, ErrBlocked
 		}
 	}
 
@@ -62,27 +122,60 @@ func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, err
 	expiresAt := time.Now().Add(s.OTPTTL)
 	if err := s.OTP.Create(ctx, repositories.OTPCode{
 		ID:        id,
-		Phone:     phone,
+		Phone:     normalizedPhone,
 		CodeHash:  codeHash,
 		ExpiresAt: expiresAt,
 		Attempts:  0,
 	}); err != nil {
+		log.Error().Err(err).Str("phone", phoneMasked).Msg("otp send failed to persist otp")
 		return OTPResult{}, err
 	}
+	log.Info().Str("phone", phoneMasked).Time("expires_at", expiresAt).Msg("otp code persisted")
 
-	return OTPResult{Code: code, ExpiresAt: expiresAt}, nil
+	if s.isSMSDeliveryEnabled() {
+		if s.SMS == nil {
+			log.Error().Str("phone", phoneMasked).Str("otp_delivery_mode", s.OTPDeliveryMode).Msg("otp sms sender is not configured")
+			return OTPResult{}, ErrSMSDeliveryError
+		}
+		text := fmt.Sprintf("%s %s", strings.TrimSpace(s.OTPMessagePrefix), code)
+		sendResult, sendErr := s.SMS.SendSMS(ctx, normalizedPhone, strings.TrimSpace(text), s.OTPSender, s.OTPValidityMin)
+		if sendErr != nil {
+			var apiErr *mobizon.APIError
+			if errors.As(sendErr, &apiErr) && apiErr.Code == 30 {
+				log.Warn().Err(sendErr).Str("phone", phoneMasked).Msg("otp sms provider rate limited")
+				return OTPResult{}, ErrSMSRateLimited
+			}
+			log.Error().Err(sendErr).Str("phone", phoneMasked).Msg("otp sms send failed")
+			return OTPResult{}, ErrSMSDeliveryError
+		}
+		log.Info().Str("phone", phoneMasked).Str("message_id", sendResult.MessageID).Str("campaign_id", sendResult.CampaignID).Msg("otp sms sent")
+	} else {
+		log.Info().Str("phone", phoneMasked).Str("otp_delivery_mode", s.OTPDeliveryMode).Msg("otp sms delivery skipped by mode")
+	}
+
+	result := OTPResult{ExpiresAt: expiresAt}
+	if s.shouldEchoCode() {
+		result.Code = &code
+	}
+	log.Info().Str("phone", phoneMasked).Bool("dev_code_in_response", result.Code != nil).Msg("otp send completed")
+	return result, nil
 }
 
 func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenPair, error) {
-	latest, err := s.OTP.LatestByPhone(ctx, phone)
+	normalizedPhone, err := NormalizePhone(phone)
 	if err != nil {
-		return TokenPair{}, errors.New("otp not found")
+		return TokenPair{}, err
+	}
+
+	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
+	if err != nil {
+		return TokenPair{}, ErrOTPNotFound
 	}
 	if latest.BlockedUntil.Valid && latest.BlockedUntil.Time.After(time.Now()) {
-		return TokenPair{}, errors.New("blocked")
+		return TokenPair{}, ErrBlocked
 	}
 	if latest.ExpiresAt.Before(time.Now()) {
-		return TokenPair{}, errors.New("otp expired")
+		return TokenPair{}, ErrOTPExpired
 	}
 
 	if hashOTP(code) != latest.CodeHash {
@@ -91,10 +184,10 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 		if attempts >= s.OTPMaxAttempts {
 			_ = s.OTP.Block(ctx, latest.ID, time.Now().Add(s.OTPTTL))
 		}
-		return TokenPair{}, errors.New("invalid code")
+		return TokenPair{}, ErrInvalidCode
 	}
 
-	user, err := s.Users.FindByPhone(ctx, phone)
+	user, err := s.Users.FindByPhone(ctx, normalizedPhone)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return TokenPair{}, err
@@ -103,7 +196,7 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 		if err != nil {
 			return TokenPair{}, err
 		}
-		user = repositories.User{ID: id, Phone: phone, Role: "user"}
+		user = repositories.User{ID: id, Phone: normalizedPhone, Role: "user"}
 		if err := s.Users.Create(ctx, user); err != nil {
 			return TokenPair{}, err
 		}
@@ -174,6 +267,35 @@ func (s *AuthService) issueTokens(ctx context.Context, userID, role string) (Tok
 	}
 
 	return TokenPair{AccessToken: accessToken, RefreshToken: refreshTokenValue, ExpiresAt: expiresAt}, nil
+}
+
+func NormalizePhone(phone string) (string, error) {
+	trimmed := strings.TrimSpace(phone)
+	if trimmed == "" {
+		return "", ErrPhoneRequired
+	}
+	normalized := nonDigit.ReplaceAllString(trimmed, "")
+	if len(normalized) < 10 || len(normalized) > 15 {
+		return "", ErrPhoneInvalid
+	}
+	return normalized, nil
+}
+
+func MaskPhone(phone string) string {
+	if len(phone) <= 4 {
+		return "****"
+	}
+	return strings.Repeat("*", len(phone)-4) + phone[len(phone)-4:]
+}
+
+func (s *AuthService) isSMSDeliveryEnabled() bool {
+	mode := strings.ToLower(strings.TrimSpace(s.OTPDeliveryMode))
+	return mode == OTPDeliveryModeMobizon || mode == OTPDeliveryModeMobizonEcho
+}
+
+func (s *AuthService) shouldEchoCode() bool {
+	mode := strings.ToLower(strings.TrimSpace(s.OTPDeliveryMode))
+	return mode == "" || mode == OTPDeliveryModeDev || mode == OTPDeliveryModeMobizonEcho
 }
 
 func hashOTP(code string) string {

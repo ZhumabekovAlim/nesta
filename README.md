@@ -530,6 +530,11 @@ export REFRESH_TOKEN_TTL=720h
 export OTP_TTL=5m
 export OTP_RATE_LIMIT=1m
 export OTP_MAX_ATTEMPTS=5
+export AUTH_OTP_DELIVERY_MODE=dev
+export MOBIZON_API_KEY=""
+export MOBIZON_BASE_URL="https://api.mobizon.kz/service/"
+export MOBIZON_SENDER=""
+export MOBIZON_VALIDITY_MINUTES=0
 
 go run ./cmd/api
 ```
@@ -545,6 +550,27 @@ go run ./cmd/api
 - `OTP_TTL` — время жизни OTP кода (например `5m`).
 - `OTP_RATE_LIMIT` — ограничение отправки OTP по телефону (например `1m`).
 - `OTP_MAX_ATTEMPTS` — максимум попыток ввода OTP.
+- `AUTH_OTP_DELIVERY_MODE` — режим выдачи OTP: `dev`, `mobizon`, `mobizon+echo`.
+- `MOBIZON_API_KEY` — API-ключ Mobizon (секрет, не логировать).
+- `MOBIZON_BASE_URL` — базовый URL Mobizon API (по умолчанию `https://api.mobizon.kz/service/`).
+- `MOBIZON_SENDER` — опциональная подпись отправителя (`from`).
+- `MOBIZON_VALIDITY_MINUTES` — опциональный TTL доставки (`params[validity]`).
+- `AUTH_OTP_MESSAGE_PREFIX` — префикс текста SMS (по умолчанию `Код подтверждения:`).
+
+### Режимы доставки OTP
+
+- `dev` — SMS не отправляется, `dev_code` возвращается в ответе.
+- `mobizon+echo` — SMS отправляется через Mobizon и дополнительно возвращается `dev_code` (только для тестовых стендов).
+- `mobizon` — SMS отправляется через Mobizon, `dev_code` не возвращается.
+
+По умолчанию безопасное поведение зависит от `APP_ENV`: для `development/dev/local/test` используется `dev`, для остальных окружений — `mobizon`.
+
+> Для production обязательно выключайте `mobizon+echo`, чтобы OTP-код не утекал в API-ответах.
+
+### Требования Mobizon
+
+- В кабинете Mobizon должен быть включён доступ к API и активен API key.
+- Для API key нужно ограничить доступ по IP-адресам серверов (IP whitelist) в панели Mobizon.
 
 ## Миграции
 
@@ -682,9 +708,14 @@ curl http://localhost:8080/api/v1/products/p1
 - Лимит отправки — `OTP_RATE_LIMIT` (по умолчанию 1 мин).
 - При превышении лимита возвращается `RATE_LIMITED`.
 
-**Ответ (dev):**
+**Ответ (режим `dev` / `mobizon+echo`):**
 ```json
 { "status": "sent", "expires_at": "2025-01-01T10:00:00Z", "dev_code": "123456" }
+```
+
+**Ответ (режим `mobizon`):**
+```json
+{ "status": "sent", "expires_at": "2025-01-01T10:00:00Z", "dev_code": null }
 ```
 
 ### 2.2. Верификация OTP

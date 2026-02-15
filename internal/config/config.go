@@ -17,8 +17,18 @@ type Config struct {
 	OTPTTL             time.Duration
 	OTPRateLimit       time.Duration
 	OTPMaxAttempts     int
+	OTPDeliveryMode    string
+	Mobizon            MobizonConfig
 	SubscriptionPolicy string
 	Robokassa          RobokassaConfig
+}
+
+type MobizonConfig struct {
+	BaseURL       string
+	APIKey        string
+	Sender        string
+	Validity      int
+	MessagePrefix string
 }
 
 type RobokassaConfig struct {
@@ -37,16 +47,25 @@ type RobokassaConfig struct {
 }
 
 func Load() Config {
+	env := getEnv("APP_ENV", "development")
 	return Config{
-		Port:               getEnv("PORT", "8080"),
-		DatabaseURL:        getEnv("DB_URL", "postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta"),
-		Env:                getEnv("APP_ENV", "development"),
-		JWTSecret:          getEnv("JWT_SECRET", "dev-secret"),
-		AccessTokenTTL:     getDurationEnv("ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTokenTTL:    getDurationEnv("REFRESH_TOKEN_TTL", 720*time.Hour),
-		OTPTTL:             getDurationEnv("OTP_TTL", 5*time.Minute),
-		OTPRateLimit:       getDurationEnv("OTP_RATE_LIMIT", time.Minute),
-		OTPMaxAttempts:     getIntEnv("OTP_MAX_ATTEMPTS", 5),
+		Port:            getEnv("PORT", "8080"),
+		DatabaseURL:     getEnv("DB_URL", "postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta"),
+		Env:             env,
+		JWTSecret:       getEnv("JWT_SECRET", "dev-secret"),
+		AccessTokenTTL:  getDurationEnv("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTokenTTL: getDurationEnv("REFRESH_TOKEN_TTL", 720*time.Hour),
+		OTPTTL:          getDurationEnv("OTP_TTL", 5*time.Minute),
+		OTPRateLimit:    getDurationEnv("OTP_RATE_LIMIT", time.Minute),
+		OTPMaxAttempts:  getIntEnv("OTP_MAX_ATTEMPTS", 5),
+		OTPDeliveryMode: getEnv("AUTH_OTP_DELIVERY_MODE", defaultOTPDeliveryMode(env)),
+		Mobizon: MobizonConfig{
+			BaseURL:       getEnv("MOBIZON_BASE_URL", "https://api.mobizon.kz/service/"),
+			APIKey:        getEnv("MOBIZON_API_KEY", ""),
+			Sender:        getEnv("MOBIZON_SENDER", ""),
+			Validity:      getIntEnv("MOBIZON_VALIDITY_MINUTES", 0),
+			MessagePrefix: getEnv("AUTH_OTP_MESSAGE_PREFIX", "Код подтверждения:"),
+		},
 		SubscriptionPolicy: getEnv("SUBSCRIPTION_CANCEL_POLICY", "immediate"),
 		Robokassa: RobokassaConfig{
 			MerchantLogin:   getEnv("ROBOKASSA_MERCHANT_LOGIN", ""),
@@ -63,6 +82,14 @@ func Load() Config {
 			DefaultCurrency: getEnv("ROBOKASSA_DEFAULT_CURRENCY", "KZT"),
 		},
 	}
+}
+
+func defaultOTPDeliveryMode(env string) string {
+	env = strings.ToLower(strings.TrimSpace(env))
+	if env == "development" || env == "dev" || env == "local" || env == "test" {
+		return "dev"
+	}
+	return "mobizon"
 }
 
 func getEnv(key, fallback string) string {
