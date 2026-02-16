@@ -13,6 +13,25 @@ services:
       OTP_TTL: 5m
       OTP_RATE_LIMIT: 1m
       OTP_MAX_ATTEMPTS: 5
+      AUTH_OTP_DELIVERY_MODE: dev
+      AUTH_OTP_MESSAGE_PREFIX: "Код подтверждения:"
+      MOBIZON_BASE_URL: https://api.mobizon.kz/service/
+      MOBIZON_API_KEY: ""
+      MOBIZON_SENDER: ""
+      MOBIZON_VALIDITY_MINUTES: 0
+      SUBSCRIPTION_CANCEL_POLICY: immediate
+      ROBOKASSA_MERCHANT_LOGIN: ""
+      ROBOKASSA_PASSWORD_1: ""
+      ROBOKASSA_PASSWORD_2: ""
+      ROBOKASSA_TEST_PASSWORD_1: ""
+      ROBOKASSA_TEST_PASSWORD_2: ""
+      ROBOKASSA_IS_TEST: "false"
+      ROBOKASSA_HASH_ALGO: MD5
+      ROBOKASSA_PAYMENT_URL: https://auth.robokassa.kz/Merchant/Index.aspx
+      ROBOKASSA_RESULT_URL: /api/v1/payments/robokassa/result
+      ROBOKASSA_SUCCESS_URL: /api/v1/payments/robokassa/success
+      ROBOKASSA_FAIL_URL: /api/v1/payments/robokassa/fail
+      ROBOKASSA_DEFAULT_CURRENCY: KZT
     ports:
       - "8080:8080"
     depends_on:
