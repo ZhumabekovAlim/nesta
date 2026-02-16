@@ -91,29 +91,48 @@ type TokenPair struct {
 }
 
 func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, error) {
+	log.Info().Str("phone", MaskPhone(phone)).Msg("otp send started")
+
 	normalizedPhone, err := NormalizePhone(phone)
 	if err != nil {
+		log.Warn().Err(err).Str("phone", MaskPhone(phone)).Msg("otp send failed: phone normalization error")
 		return OTPResult{}, err
 	}
 
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Msg("otp send phone normalized")
+
 	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
 	if err == nil {
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", latest.ID).Time("latest_created_at", latest.CreatedAt).Msg("otp send latest code loaded")
 		if time.Since(latest.CreatedAt) < s.OTPRateLimit {
+			log.Warn().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", latest.ID).Msg("otp send rejected: rate limited")
 			return OTPResult{}, ErrRateLimited
 		}
 		if latest.BlockedUntil.Valid && latest.BlockedUntil.Time.After(time.Now()) {
+			log.Warn().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", latest.ID).Time("blocked_until", latest.BlockedUntil.Time).Msg("otp send rejected: phone blocked")
 			return OTPResult{}, ErrBlocked
 		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		log.Error().Err(err).Str("phone", MaskPhone(normalizedPhone)).Msg("otp send failed: latest code lookup error")
+		return OTPResult{}, err
+	} else {
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Msg("otp send latest code not found")
 	}
 
 	code := fmt.Sprintf("%06d", rand.Intn(1000000))
 	codeHash := hashOTP(code)
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Msg("otp send code generated")
+
 	id, err := NewID()
 	if err != nil {
+		log.Error().Err(err).Str("phone", MaskPhone(normalizedPhone)).Msg("otp send failed: otp id generation error")
 		return OTPResult{}, err
 	}
 
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send otp id generated")
+
 	expiresAt := time.Now().Add(s.OTPTTL)
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Time("expires_at", expiresAt).Msg("otp send persisting otp code")
 	if err := s.OTP.Create(ctx, repositories.OTPCode{
 		ID:        id,
 		Phone:     normalizedPhone,
@@ -121,30 +140,60 @@ func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, err
 		ExpiresAt: expiresAt,
 		Attempts:  0,
 	}); err != nil {
+		log.Error().Err(err).Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send failed: otp create error")
 		return OTPResult{}, err
 	}
 
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send otp code persisted")
+
 	if s.isSMSDeliveryEnabled() {
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Str("delivery_mode", s.OTPDeliveryMode).Msg("otp send sms delivery enabled")
 		if s.SMS == nil {
+			log.Error().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send failed: sms client is not configured")
 			return OTPResult{}, ErrSMSDeliveryError
 		}
-		text := fmt.Sprintf("%s %s", strings.TrimSpace(s.OTPMessagePrefix), code)
-		sendResult, sendErr := s.SMS.SendSMS(ctx, normalizedPhone, strings.TrimSpace(text), s.OTPSender, s.OTPValidityMin)
+
+		prefix := strings.TrimSpace(s.OTPMessagePrefix)
+		text := strings.TrimSpace(fmt.Sprintf("%s %s", prefix, code))
+		log.Info().
+			Str("phone", MaskPhone(normalizedPhone)).
+			Str("otp_id", id).
+			Str("sender", s.OTPSender).
+			Int("validity_min", s.OTPValidityMin).
+			Str("message_prefix", prefix).
+			Int("message_len", len(text)).
+			Msg("otp send sending sms")
+
+		sendResult, sendErr := s.SMS.SendSMS(ctx, normalizedPhone, text, s.OTPSender, s.OTPValidityMin)
 		if sendErr != nil {
 			var apiErr *mobizon.APIError
-			if errors.As(sendErr, &apiErr) && apiErr.Code == 30 {
-				return OTPResult{}, ErrSMSRateLimited
+			if errors.As(sendErr, &apiErr) {
+				entry := log.Error().Err(sendErr).Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Int("provider_error_code", apiErr.Code).Str("provider_error_message", apiErr.Message)
+				if apiErr.Code == 30 {
+					entry.Msg("otp send failed: sms provider rate limited")
+					return OTPResult{}, ErrSMSRateLimited
+				}
+				entry.Msg("otp send failed: sms provider validation or delivery error")
+				return OTPResult{}, ErrSMSDeliveryError
 			}
-			log.Error().Err(sendErr).Str("phone", MaskPhone(normalizedPhone)).Msg("otp sms send failed")
+
+			log.Error().Err(sendErr).Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send failed: sms delivery error")
 			return OTPResult{}, ErrSMSDeliveryError
 		}
-		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("message_id", sendResult.MessageID).Str("campaign_id", sendResult.CampaignID).Msg("otp sms sent")
+
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Str("message_id", sendResult.MessageID).Str("campaign_id", sendResult.CampaignID).Msg("otp send sms delivered")
+	} else {
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Str("delivery_mode", s.OTPDeliveryMode).Msg("otp send sms delivery skipped")
 	}
 
 	result := OTPResult{ExpiresAt: expiresAt}
 	if s.shouldEchoCode() {
 		result.Code = &code
+		log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Msg("otp send dev code echo enabled")
 	}
+
+	log.Info().Str("phone", MaskPhone(normalizedPhone)).Str("otp_id", id).Time("expires_at", result.ExpiresAt).Msg("otp send completed")
+
 	return result, nil
 }
 
