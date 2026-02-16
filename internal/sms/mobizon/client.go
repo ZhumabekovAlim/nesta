@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -70,11 +72,32 @@ func (c *Client) SendSMS(ctx context.Context, recipient, text, sender string, va
 	endpoint.RawQuery = q.Encode()
 
 	form := buildForm(recipient, text, sender, validity)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), strings.NewReader(form.Encode()))
+	encodedForm := form.Encode()
+
+	log.Info().
+		Str("provider", "mobizon").
+		Str("method", http.MethodPost).
+		Str("endpoint", endpoint.Redacted()).
+		Str("content_type", "application/x-www-form-urlencoded").
+		Str("transport", "https").
+		Str("recipient", recipient).
+		Str("sender", sender).
+		Int("validity_min", validity).
+		Str("text", text).
+		Str("encoded_body", encodedForm).
+		Str("api_key_masked", maskAPIKey(c.apiKey)).
+		Msg("mobizon request prepared")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), strings.NewReader(encodedForm))
 	if err != nil {
 		return SendSMSResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	log.Info().
+		Str("provider", "mobizon").
+		Str("endpoint", endpoint.Redacted()).
+		Msg("mobizon request sent")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -86,6 +109,12 @@ func (c *Client) SendSMS(ctx context.Context, recipient, text, sender string, va
 	if err != nil {
 		return SendSMSResult{}, err
 	}
+
+	log.Info().
+		Str("provider", "mobizon").
+		Int("http_status", resp.StatusCode).
+		Str("response_body", string(body)).
+		Msg("mobizon response received")
 
 	return parseSendSMSResponse(body)
 }
@@ -147,4 +176,15 @@ func anyToString(v any) string {
 	default:
 		return fmt.Sprint(value)
 	}
+}
+
+func maskAPIKey(key string) string {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) <= 4 {
+		return "****"
+	}
+	return trimmed[:2] + strings.Repeat("*", len(trimmed)-4) + trimmed[len(trimmed)-2:]
 }
