@@ -119,13 +119,10 @@ func (c *Client) SendSMS(ctx context.Context, recipient, text, sender string, va
 	return parseSendSMSResponse(body)
 }
 
-func buildForm(recipient, text, sender string, validity int) url.Values {
+func buildForm(recipient, text, _ string, validity int) url.Values {
 	form := url.Values{}
 	form.Set("recipient", recipient)
 	form.Set("text", text)
-	if strings.TrimSpace(sender) != "" {
-		form.Set("from", sender)
-	}
 	if validity > 0 {
 		form.Set("params[validity]", strconv.Itoa(validity))
 	}

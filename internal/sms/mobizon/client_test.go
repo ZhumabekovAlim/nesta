@@ -15,8 +15,8 @@ func TestBuildFormEncodesBody(t *testing.T) {
 	if !strings.Contains(encoded, "recipient=79990001122") {
 		t.Fatalf("recipient missing: %s", encoded)
 	}
-	if !strings.Contains(encoded, "from=NESTA") {
-		t.Fatalf("sender missing: %s", encoded)
+	if strings.Contains(encoded, "from=") {
+		t.Fatalf("sender must not be sent: %s", encoded)
 	}
 	if !strings.Contains(encoded, "params%5Bvalidity%5D=10") {
 		t.Fatalf("validity missing: %s", encoded)
