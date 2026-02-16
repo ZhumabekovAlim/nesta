@@ -48,6 +48,21 @@ type RobokassaConfig struct {
 
 func Load() Config {
 	env := getEnv("APP_ENV", "development")
+	otpTTL := getDurationEnv("OTP_TTL", 5*time.Minute)
+	if otpTTL <= 0 {
+		otpTTL = 5 * time.Minute
+	}
+
+	otpRateLimit := getDurationEnv("OTP_RATE_LIMIT", time.Minute)
+	if otpRateLimit <= 0 {
+		otpRateLimit = time.Minute
+	}
+
+	otpMaxAttempts := getIntEnv("OTP_MAX_ATTEMPTS", 5)
+	if otpMaxAttempts <= 0 {
+		otpMaxAttempts = 5
+	}
+
 	return Config{
 		Port:            getEnv("PORT", "8080"),
 		DatabaseURL:     getEnv("DB_URL", "postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta"),
@@ -55,9 +70,9 @@ func Load() Config {
 		JWTSecret:       getEnv("JWT_SECRET", "dev-secret"),
 		AccessTokenTTL:  getDurationEnv("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL: getDurationEnv("REFRESH_TOKEN_TTL", 720*time.Hour),
-		OTPTTL:          getDurationEnv("OTP_TTL", 5*time.Minute),
-		OTPRateLimit:    getDurationEnv("OTP_RATE_LIMIT", time.Minute),
-		OTPMaxAttempts:  getIntEnv("OTP_MAX_ATTEMPTS", 5),
+		OTPTTL:          otpTTL,
+		OTPRateLimit:    otpRateLimit,
+		OTPMaxAttempts:  otpMaxAttempts,
 		OTPDeliveryMode: getEnv("AUTH_OTP_DELIVERY_MODE", defaultOTPDeliveryMode(env)),
 		Mobizon: MobizonConfig{
 			BaseURL:       getEnv("MOBIZON_BASE_URL", "https://api.mobizon.kz/service/"),
