@@ -202,7 +202,7 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 	if err != nil {
 		return TokenPair{}, err
 	}
-
+	fmt.Println(normalizedPhone)
 	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
 	fmt.Println(latest)
 	if err != nil {

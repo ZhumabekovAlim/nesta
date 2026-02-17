@@ -47,10 +47,15 @@ jobs:
 
             cd /srv/apps/nesta-server
 
-            # Write .env exactly as stored in secrets.APP_ENV
-            cat > .env << 'EOF'
+            if [ ! -f .env ]; then
+            cat > .env << 'EOF' 
             ${{ secrets.APP_ENV }}
             EOF
+            chmod 600 .env
+            echo ".env created"
+            else
+            echo ".env exists, skip overwrite"
+            fi
 
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u zhumabekovalim --password-stdin
 
