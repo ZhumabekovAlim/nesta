@@ -202,16 +202,16 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 	if err != nil {
 		return TokenPair{}, err
 	}
-	fmt.Println(normalizedPhone)
+
 	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
-	fmt.Println(latest)
+
 	if err != nil {
 		return TokenPair{}, ErrOTPNotFound
 	}
 	if latest.BlockedUntil.Valid && latest.BlockedUntil.Time.After(time.Now()) {
 		return TokenPair{}, ErrBlocked
 	}
-	if latest.ExpiresAt.Before(time.Now().Add(5 * time.Hour)) {
+	if latest.ExpiresAt.Before(time.Now()) {
 		return TokenPair{}, errors.New("otp expired")
 	}
 
