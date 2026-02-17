@@ -12,6 +12,7 @@ import (
 
 	"nesta/internal/config"
 	"nesta/internal/http/handlers"
+	addressHandlers "nesta/internal/http/handlers/addresses"
 	adminHandlers "nesta/internal/http/handlers/admin"
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
@@ -22,6 +23,7 @@ import (
 	"nesta/internal/http/server"
 	"nesta/internal/repositories"
 	"nesta/internal/services"
+	"nesta/internal/sms/mobizon"
 	"nesta/internal/storage"
 
 	"github.com/rs/zerolog"
@@ -48,23 +50,38 @@ func main() {
 	repoRefresh := repositories.NewRefreshTokenRepository(store.DB)
 	repoComplexes := repositories.NewComplexRepository(store.DB)
 	repoComplexRequests := repositories.NewComplexRequestRepository(store.DB)
+	repoCities := repositories.NewCityRepository(store.DB)
 	repoPlans := repositories.NewPlanRepository(store.DB)
+	repoSubscriptionTypes := repositories.NewSubscriptionTypeRepository(store.DB)
+	repoAddresses := repositories.NewAddressRepository(store.DB)
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
 	repoProducts := repositories.NewProductRepository(store.DB)
 	repoOrders := repositories.NewOrderRepository(store.DB)
-	repoPayments := repositories.NewPaymentRepository(store.DB)
 	repoPickups := repositories.NewPickupLogRepository(store.DB)
 
+	var mobizonClient *mobizon.Client
+	if cfg.OTPDeliveryMode == services.OTPDeliveryModeMobizon || cfg.OTPDeliveryMode == services.OTPDeliveryModeMobizonEcho {
+		mobizonClient, err = mobizon.NewClient(nil, cfg.Mobizon.BaseURL, cfg.Mobizon.APIKey)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to init mobizon client")
+		}
+	}
+
 	authService := &services.AuthService{
-		Users:          repoUsers,
-		OTP:            repoOTP,
-		RefreshTokens:  repoRefresh,
-		JWTSecret:      cfg.JWTSecret,
-		AccessTTL:      cfg.AccessTokenTTL,
-		RefreshTTL:     cfg.RefreshTokenTTL,
-		OTPTTL:         cfg.OTPTTL,
-		OTPRateLimit:   cfg.OTPRateLimit,
-		OTPMaxAttempts: cfg.OTPMaxAttempts,
+		Users:            repoUsers,
+		OTP:              repoOTP,
+		RefreshTokens:    repoRefresh,
+		JWTSecret:        cfg.JWTSecret,
+		AccessTTL:        cfg.AccessTokenTTL,
+		RefreshTTL:       cfg.RefreshTokenTTL,
+		OTPTTL:           cfg.OTPTTL,
+		OTPRateLimit:     cfg.OTPRateLimit,
+		OTPMaxAttempts:   cfg.OTPMaxAttempts,
+		OTPDeliveryMode:  cfg.OTPDeliveryMode,
+		OTPSender:        cfg.Mobizon.Sender,
+		OTPValidityMin:   cfg.Mobizon.Validity,
+		OTPMessagePrefix: cfg.Mobizon.MessagePrefix,
+		SMS:              mobizonClient,
 	}
 
 	complexService := &services.ComplexService{
@@ -74,8 +91,15 @@ func main() {
 		ThresholdStatus: "PLANNED",
 	}
 
+	addressService := &services.AddressService{
+		Addresses: repoAddresses,
+		Complexes: repoComplexes,
+		Cities:    repoCities,
+	}
+
 	subscriptionService := &services.SubscriptionService{
 		Subscriptions: repoSubscriptions,
+		Addresses:     repoAddresses,
 		Complexes:     repoComplexes,
 		Plans:         repoPlans,
 	}
@@ -86,10 +110,8 @@ func main() {
 	}
 
 	paymentService := &services.PaymentService{
-		DB:            store.DB,
-		Payments:      repoPayments,
-		Orders:        repoOrders,
-		Subscriptions: repoSubscriptions,
+		DB:     store.DB,
+		Config: cfg.Robokassa,
 	}
 
 	deps := server.Dependencies{
@@ -101,18 +123,26 @@ func main() {
 			Service:   complexService,
 			JWTSecret: cfg.JWTSecret,
 		},
-		Plans:   apiHandlers.PlanHandler{Plans: repoPlans},
-		Pickups: apiHandlers.PickupHandler{Logs: repoPickups},
+		Cities:            apiHandlers.CityHandler{Cities: repoCities},
+		Plans:             apiHandlers.PlanHandler{Plans: repoPlans},
+		SubscriptionTypes: apiHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},
+		Pickups:           apiHandlers.PickupHandler{Logs: repoPickups},
+		Addresses: addressHandlers.Handler{
+			Service:   addressService,
+			Addresses: repoAddresses,
+		},
 		Subscriptions: subscriptionHandlers.Handler{
 			Service:       subscriptionService,
 			Subscriptions: repoSubscriptions,
+			Addresses:     repoAddresses,
 		},
 		Users:          userHandlers.Handler{Users: repoUsers},
 		Products:       storeHandlers.ProductHandler{Products: repoProducts},
 		Orders:         storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
 		Payments:       paymentHandlers.Handler{Payments: paymentService},
-		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Service: complexService},
+		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Cities: repoCities, Service: complexService},
 		AdminPlans:     adminHandlers.PlanHandler{Plans: repoPlans},
+		AdminSubTypes:  adminHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},
 		AdminSubs:      adminHandlers.SubscriptionHandler{Subscriptions: repoSubscriptions, Service: subscriptionService},
 		AdminProducts:  adminHandlers.ProductHandler{Products: repoProducts},
 		AdminOrders:    adminHandlers.OrderHandler{Orders: repoOrders},

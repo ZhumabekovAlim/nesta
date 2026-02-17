@@ -35,7 +35,11 @@ func (h ComplexHandler) List(w http.ResponseWriter, r *http.Request) {
 	if query.Get("only_active") != "" {
 		onlyActive = query.Get("only_active") == "1"
 	}
-	items, err := h.Complexes.List(r.Context(), query.Get("search"), query.Get("status"), query.Get("city"), onlyActive, limit, offset)
+	cityID := query.Get("city_id")
+	if cityID == "" {
+		cityID = query.Get("city")
+	}
+	items, err := h.Complexes.List(r.Context(), query.Get("search"), query.Get("status"), cityID, onlyActive, limit, offset)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to list", RequestID: middleware.GetRequestID(r.Context())})
 		return
@@ -46,6 +50,7 @@ func (h ComplexHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/complexes/")
+
 	if id == "" {
 		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
 		return

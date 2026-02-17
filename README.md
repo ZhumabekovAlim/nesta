@@ -319,6 +319,8 @@ GET /api/v1/me
 
 PATCH /api/v1/me (name, email?, default_address_json?)
 
+PATCH /api/v1/profile (name, email?, default_address_json?)
+
 Подписки
 
 POST /api/v1/subscriptions
@@ -528,6 +530,11 @@ export REFRESH_TOKEN_TTL=720h
 export OTP_TTL=5m
 export OTP_RATE_LIMIT=1m
 export OTP_MAX_ATTEMPTS=5
+export AUTH_OTP_DELIVERY_MODE=dev
+export MOBIZON_API_KEY=""
+export MOBIZON_BASE_URL="https://api.mobizon.kz/service/"
+export MOBIZON_SENDER=""
+export MOBIZON_VALIDITY_MINUTES=0
 
 go run ./cmd/api
 ```
@@ -543,6 +550,27 @@ go run ./cmd/api
 - `OTP_TTL` — время жизни OTP кода (например `5m`).
 - `OTP_RATE_LIMIT` — ограничение отправки OTP по телефону (например `1m`).
 - `OTP_MAX_ATTEMPTS` — максимум попыток ввода OTP.
+- `AUTH_OTP_DELIVERY_MODE` — режим выдачи OTP: `dev`, `mobizon`, `mobizon+echo`.
+- `MOBIZON_API_KEY` — API-ключ Mobizon (секрет, не логировать).
+- `MOBIZON_BASE_URL` — базовый URL Mobizon API (по умолчанию `https://api.mobizon.kz/service/`).
+- `MOBIZON_SENDER` — опциональная подпись отправителя (`from`).
+- `MOBIZON_VALIDITY_MINUTES` — опциональный TTL доставки (`params[validity]`).
+- `AUTH_OTP_MESSAGE_PREFIX` — префикс текста SMS (по умолчанию `Код подтверждения:`).
+
+### Режимы доставки OTP
+
+- `dev` — SMS не отправляется, `dev_code` возвращается в ответе.
+- `mobizon+echo` — SMS отправляется через Mobizon и дополнительно возвращается `dev_code` (только для тестовых стендов).
+- `mobizon` — SMS отправляется через Mobizon, `dev_code` не возвращается.
+
+По умолчанию безопасное поведение зависит от `APP_ENV`: для `development/dev/local/test` используется `dev`, для остальных окружений — `mobizon`.
+
+> Для production обязательно выключайте `mobizon+echo`, чтобы OTP-код не утекал в API-ответах.
+
+### Требования Mobizon
+
+- В кабинете Mobizon должен быть включён доступ к API и активен API key.
+- Для API key нужно ограничить доступ по IP-адресам серверов (IP whitelist) в панели Mobizon.
 
 ## Миграции
 
@@ -680,9 +708,14 @@ curl http://localhost:8080/api/v1/products/p1
 - Лимит отправки — `OTP_RATE_LIMIT` (по умолчанию 1 мин).
 - При превышении лимита возвращается `RATE_LIMITED`.
 
-**Ответ (dev):**
+**Ответ (режим `dev` / `mobizon+echo`):**
 ```json
 { "status": "sent", "expires_at": "2025-01-01T10:00:00Z", "dev_code": "123456" }
+```
+
+**Ответ (режим `mobizon`):**
+```json
+{ "status": "sent", "expires_at": "2025-01-01T10:00:00Z", "dev_code": null }
 ```
 
 ### 2.2. Верификация OTP
@@ -744,7 +777,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/me
 ```
 
 ### 3.2. Обновить профиль
-**PATCH /api/v1/me**
+**PATCH /api/v1/me** (или **PATCH /api/v1/profile**)
 
 **Body:**
 ```json
@@ -951,3 +984,48 @@ curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/me
   "request_id": "..."
 }
 ```
+
+## Robokassa integration
+
+### Environment variables
+
+Required:
+- `ROBOKASSA_MERCHANT_LOGIN`
+- `ROBOKASSA_PASSWORD_1`
+- `ROBOKASSA_PASSWORD_2`
+- `ROBOKASSA_HASH_ALGO` (`MD5` or `SHA256`)
+- `ROBOKASSA_PAYMENT_URL` (example: `https://auth.robokassa.kz/Merchant/Index.aspx`)
+- `ROBOKASSA_RESULT_URL` (`/api/v1/payments/robokassa/result`)
+- `ROBOKASSA_SUCCESS_URL` (`/api/v1/payments/robokassa/success`)
+- `ROBOKASSA_FAIL_URL` (`/api/v1/payments/robokassa/fail`)
+- `ROBOKASSA_DEFAULT_CURRENCY` (default `KZT`)
+
+Optional testing mode:
+- `ROBOKASSA_IS_TEST=true`
+- `ROBOKASSA_TEST_PASSWORD_1`
+- `ROBOKASSA_TEST_PASSWORD_2`
+
+### Endpoints
+
+- `POST /api/v1/payments/robokassa/init` — creates `PENDING` payment and returns Robokassa redirect URL.
+- `POST /api/v1/payments/robokassa/result` — ResultURL callback (source of truth). Validates signature and amount, applies business effect exactly once, returns `OK{InvId}`.
+- `GET|POST /api/v1/payments/robokassa/success` — user redirect endpoint; does not confirm payment.
+- `GET|POST /api/v1/payments/robokassa/fail` — user redirect for failed/canceled payment.
+
+### Robokassa cabinet settings
+
+Set merchant URLs to application public URLs:
+- ResultURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/result`
+- SuccessURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/success`
+- FailURL: `<PUBLIC_BASE_URL>/api/v1/payments/robokassa/fail`
+
+### Local smoke flow
+
+1. Create order/subscription in DB or via API.
+2. Call `POST /api/v1/payments/robokassa/init` with auth token and payload:
+   ```json
+   {"type":"order","entity_id":"<order_id>","description":"Order payment"}
+   ```
+3. Open `payment_url` in browser.
+4. Simulate callback to ResultURL with valid signature and ensure response body is exactly `OK{InvId}`.
+5. Repeat callback with same data and verify idempotent result (`OK{InvId}` and no repeated stock/subscription changes).

@@ -12,7 +12,8 @@ RUN go build -o bin/api ./cmd/api
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
+ENV TZ=Asia/Qyzylorda
 
 WORKDIR /app
 
