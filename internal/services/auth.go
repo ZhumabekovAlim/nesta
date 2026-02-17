@@ -210,8 +210,8 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 	if latest.BlockedUntil.Valid && latest.BlockedUntil.Time.After(time.Now()) {
 		return TokenPair{}, ErrBlocked
 	}
-	if latest.ExpiresAt.Before(time.Now()) {
-		return TokenPair{}, ErrOTPExpired
+	if latest.ExpiresAt.Before(time.Now().Add(5 * time.Hour)) {
+		return TokenPair{}, errors.New("otp expired")
 	}
 
 	if hashOTP(code) != latest.CodeHash {
