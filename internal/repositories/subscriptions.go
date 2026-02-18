@@ -3,7 +3,10 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Subscription struct {
@@ -31,6 +34,39 @@ func NewSubscriptionRepository(db *sql.DB) *SubscriptionRepository {
 }
 
 func (r *SubscriptionRepository) Create(ctx context.Context, sub Subscription) error {
+	err := r.createAddressBased(ctx, sub)
+	if err == nil {
+		return nil
+	}
+
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+
+	if pgErr.Code == "23502" && requiresLegacyColumns(pgErr.ColumnName) {
+		return r.createLegacy(ctx, sub)
+	}
+
+	if pgErr.Code == "23503" && pgErr.ConstraintName == "subscriptions_plan_id_fkey" {
+		if ensureErr := r.ensureCompatPlanFromSubscriptionType(ctx, sub.PlanID); ensureErr != nil {
+			return ensureErr
+		}
+
+		retryErr := r.createAddressBased(ctx, sub)
+		if retryErr == nil {
+			return nil
+		}
+		if errors.As(retryErr, &pgErr) && pgErr.Code == "23502" && requiresLegacyColumns(pgErr.ColumnName) {
+			return r.createLegacy(ctx, sub)
+		}
+		return retryErr
+	}
+
+	return err
+}
+
+func (r *SubscriptionRepository) createAddressBased(ctx context.Context, sub Subscription) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO subscriptions (
 			id, user_id, address_id, plan_id, status, time_window, instructions, current_period_start, current_period_end
@@ -38,6 +74,43 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub Subscription) e
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, sub.ID, sub.UserID, sub.AddressID, sub.PlanID, sub.Status, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	return err
+}
+
+func (r *SubscriptionRepository) createLegacy(ctx context.Context, sub Subscription) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO subscriptions (
+			id, user_id, address_id, plan_id, status, address_name, address_json, complex_id, time_window, instructions, current_period_start, current_period_end
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, sub.ID, sub.UserID, sub.AddressID, sub.PlanID, sub.Status, sub.AddressName, sub.AddressJSON, sub.ComplexID, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	return err
+}
+
+func (r *SubscriptionRepository) ensureCompatPlanFromSubscriptionType(ctx context.Context, subscriptionTypeID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO plans (id, name, price_cents, frequency, bags_per_day, description, is_active)
+		SELECT
+			st.id,
+			st.title,
+			st.price_cents,
+			'MONTHLY',
+			0,
+			st.subtitle,
+			st.is_active
+		FROM subscription_types st
+		WHERE st.id = $1
+		ON CONFLICT (id) DO NOTHING
+	`, subscriptionTypeID)
+	return err
+}
+
+func requiresLegacyColumns(columnName string) bool {
+	switch columnName {
+	case "complex_id", "address_json", "address_name":
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *SubscriptionRepository) ListByUser(ctx context.Context, userID string) ([]Subscription, error) {

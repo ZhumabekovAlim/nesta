@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 )
 
 type SubscriptionType struct {
@@ -46,6 +47,24 @@ func (r *SubscriptionTypeRepository) ListActive(ctx context.Context) ([]Subscrip
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (r *SubscriptionTypeRepository) Get(ctx context.Context, id string) (SubscriptionType, error) {
+	var item SubscriptionType
+	var featuresRaw []byte
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, title, subtitle, price_cents, features, is_active
+		FROM subscription_types
+		WHERE id = $1
+	`, id).Scan(&item.ID, &item.Title, &item.Subtitle, &item.PriceCents, &featuresRaw, &item.IsActive)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SubscriptionType{}, errors.New("subscription type not found")
+		}
+		return SubscriptionType{}, err
+	}
+	_ = json.Unmarshal(featuresRaw, &item.Features)
+	return item, nil
 }
 
 func (r *SubscriptionTypeRepository) Create(ctx context.Context, item SubscriptionType) error {
