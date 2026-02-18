@@ -1,14 +1,4 @@
 services:
-  api:
-    image: ghcr.io/zhumabekovalim/nesta:latest
-    restart: unless-stopped
-    env_file:
-      - /srv/apps/nesta-server/.env
-    ports:
-      - "127.0.0.1:8080:8080"
-    depends_on:
-      - postgres
-
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -16,6 +6,37 @@ services:
       - /srv/apps/nesta-server/.env
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    image: ghcr.io/zhumabekovalim/nesta:latest
+    restart: unless-stopped
+    pull_policy: always
+    env_file:
+      - /srv/apps/nesta-server/.env
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
