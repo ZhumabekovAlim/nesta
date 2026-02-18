@@ -68,12 +68,8 @@ jobs:
 
             cd /srv/apps/nesta-server
 
-            # Always write env so changes apply
-            umask 077
-            cat > .env << 'EOF'
-            ${{ secrets.APP_ENV }}
-            EOF
-            chmod 600 .env
+            # (опционально) убедимся, что .env уже есть и его никто не должен трогать
+            test -f .env || (echo ".env not found on server: /srv/apps/nesta-server/.env" && exit 1)
 
             echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u zhumabekovalim --password-stdin
 
