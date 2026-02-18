@@ -75,7 +75,7 @@ jobs:
             EOF
             chmod 600 .env
 
-            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u zhumabekovalim --password-stdin
 
             docker compose -p nesta-server pull api
             docker compose -p nesta-server up -d --remove-orphans
