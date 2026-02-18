@@ -6,18 +6,27 @@ services:
       - /srv/apps/nesta-server/.env
     volumes:
       - pgdata:/var/lib/postgresql/data
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 6
-
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  migrate:
+    image: ghcr.io/zhumabekovalim/nesta:latest
+    restart: "no"
+    env_file:
+      - /srv/apps/nesta-server/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/goose"]
+    command: ["-dir=/app/migrations", "postgres", "${DB_URL}", "up"]
 
   api:
     image: ghcr.io/zhumabekovalim/nesta:latest
@@ -27,11 +36,11 @@ services:
       - /srv/apps/nesta-server/.env
     ports:
       - "127.0.0.1:8080:8080"
-
     depends_on:
       postgres:
         condition: service_healthy
-
+      migrate:
+        condition: service_completed_successfully
     logging:
       driver: "json-file"
       options:
