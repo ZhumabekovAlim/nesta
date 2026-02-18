@@ -101,7 +101,7 @@ func main() {
 		Subscriptions: repoSubscriptions,
 		Addresses:     repoAddresses,
 		Complexes:     repoComplexes,
-		Plans:         repoPlans,
+		Types:         repoSubscriptionTypes,
 	}
 
 	orderService := &services.OrderService{

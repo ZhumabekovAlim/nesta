@@ -13,7 +13,7 @@ type SubscriptionService struct {
 	Subscriptions *repositories.SubscriptionRepository
 	Addresses     *repositories.AddressRepository
 	Complexes     *repositories.ComplexRepository
-	Plans         *repositories.PlanRepository
+	Types         *repositories.SubscriptionTypeRepository
 }
 
 type SubscriptionAddress struct {
@@ -43,12 +43,12 @@ func (s *SubscriptionService) Create(ctx context.Context, userID, addressID, pla
 		return SubscriptionCreateResult{}, errors.New("complex is not active")
 	}
 
-	plan, err := s.Plans.Get(ctx, planID)
+	subscriptionType, err := s.Types.Get(ctx, planID)
 	if err != nil {
 		return SubscriptionCreateResult{}, err
 	}
-	if !plan.IsActive {
-		return SubscriptionCreateResult{}, errors.New("plan not active")
+	if !subscriptionType.IsActive {
+		return SubscriptionCreateResult{}, errors.New("subscription type not active")
 	}
 
 	id, err := NewID()
@@ -57,7 +57,7 @@ func (s *SubscriptionService) Create(ctx context.Context, userID, addressID, pla
 	}
 
 	status := "ACTIVE"
-	requiresPayment := plan.PriceCents > 0
+	requiresPayment := subscriptionType.PriceCents > 0
 	if requiresPayment {
 		status = "PAYMENT_PENDING"
 	}
