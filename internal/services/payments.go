@@ -278,7 +278,7 @@ func (s *PaymentService) applyBusinessEffectTx(ctx context.Context, tx *sql.Tx, 
 
 func (s *PaymentService) nextInvID(ctx context.Context) (int64, error) {
 	var invID int64
-	err := s.DB.QueryRowContext(ctx, `SELECT nextval('robokassa_inv_id_seq')`).Scan(&invID)
+	err := s.DB.QueryRowContext(ctx, `SELECT nextval('public.robokassa_inv_id_seq'::regclass)`).Scan(&invID)
 	return invID, err
 }
 
