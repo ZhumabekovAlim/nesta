@@ -11,6 +11,7 @@ FROM addresses a
 WHERE s.address_id IS NULL
   AND a.id = s.id;
 
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF EXISTS (
@@ -24,7 +25,9 @@ BEGIN
             ALTER COLUMN address_id SET NOT NULL;
     END IF;
 END $$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -38,6 +41,7 @@ BEGIN
             FOREIGN KEY (address_id) REFERENCES addresses(id) ON DELETE CASCADE;
     END IF;
 END $$;
+-- +goose StatementEnd
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_address_id ON subscriptions(address_id);
 
