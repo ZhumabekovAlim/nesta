@@ -3,7 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -73,7 +73,29 @@ func (r *SubscriptionRepository) createAddressBased(ctx context.Context, sub Sub
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, sub.ID, sub.UserID, sub.AddressID, sub.PlanID, sub.Status, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
-	return err
+	if err == nil {
+		return nil
+	}
+
+	errMsg := err.Error()
+	legacySchemaRequired := strings.Contains(errMsg, `null value in column "complex_id"`) ||
+		strings.Contains(errMsg, `null value in column "address_json"`) ||
+		strings.Contains(errMsg, `null value in column "address_name"`)
+	if !legacySchemaRequired {
+		return err
+	}
+
+	_, legacyErr := r.db.ExecContext(ctx, `
+		INSERT INTO subscriptions (
+			id, user_id, address_id, plan_id, status, address_name, address_json, complex_id, time_window, instructions, current_period_start, current_period_end
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, sub.ID, sub.UserID, sub.AddressID, sub.PlanID, sub.Status, sub.AddressName, sub.AddressJSON, sub.ComplexID, sub.TimeWindow, sub.Instructions, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	if legacyErr != nil {
+		return legacyErr
+	}
+
+	return nil
 }
 
 func (r *SubscriptionRepository) createLegacy(ctx context.Context, sub Subscription) error {
