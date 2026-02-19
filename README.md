@@ -539,23 +539,82 @@ export MOBIZON_VALIDITY_MINUTES=0
 go run ./cmd/api
 ```
 
-## Переменные окружения
+## Переменные окружения (.env) — подробный гайд
 
-- `DB_URL` — строка подключения к PostgreSQL.
-- `PORT` — порт HTTP сервера.
-- `APP_ENV` — окружение (`development` включает консольный логгер).
-- `JWT_SECRET` — секрет для подписи JWT.
-- `ACCESS_TOKEN_TTL` — TTL access токена (например `15m`).
-- `REFRESH_TOKEN_TTL` — TTL refresh токена (например `720h`).
-- `OTP_TTL` — время жизни OTP кода (например `5m`).
-- `OTP_RATE_LIMIT` — ограничение отправки OTP по телефону (например `1m`).
-- `OTP_MAX_ATTEMPTS` — максимум попыток ввода OTP.
-- `AUTH_OTP_DELIVERY_MODE` — режим выдачи OTP: `dev`, `mobizon`, `mobizon+echo`.
-- `MOBIZON_API_KEY` — API-ключ Mobizon (секрет, не логировать).
-- `MOBIZON_BASE_URL` — базовый URL Mobizon API (по умолчанию `https://api.mobizon.kz/service/`).
-- `MOBIZON_SENDER` — опциональная подпись отправителя (`from`).
-- `MOBIZON_VALIDITY_MINUTES` — опциональный TTL доставки (`params[validity]`).
-- `AUTH_OTP_MESSAGE_PREFIX` — префикс текста SMS (по умолчанию `Код подтверждения:`).
+Ниже — практичный шаблон `.env` для приложения:
+
+```env
+# Core
+DB_URL=postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta
+PORT=8080
+APP_ENV=development
+JWT_SECRET=dev-secret
+ACCESS_TOKEN_TTL=15m
+REFRESH_TOKEN_TTL=720h
+
+# OTP
+OTP_TTL=5m
+OTP_RATE_LIMIT=1m
+OTP_MAX_ATTEMPTS=5
+AUTH_OTP_DELIVERY_MODE=dev
+AUTH_OTP_MESSAGE_PREFIX=Код подтверждения:
+
+# Mobizon
+MOBIZON_BASE_URL=https://api.mobizon.kz/service/
+MOBIZON_API_KEY=
+MOBIZON_SENDER=
+MOBIZON_VALIDITY_MINUTES=0
+
+# Subscription
+SUBSCRIPTION_CANCEL_POLICY=immediate
+
+# Robokassa
+ROBOKASSA_MERCHANT_LOGIN=
+ROBOKASSA_PASSWORD_1=
+ROBOKASSA_PASSWORD_2=
+ROBOKASSA_TEST_PASSWORD_1=
+ROBOKASSA_TEST_PASSWORD_2=
+ROBOKASSA_IS_TEST=false
+ROBOKASSA_HASH_ALGO=MD5
+ROBOKASSA_PAYMENT_URL=https://auth.robokassa.kz/Merchant/Index.aspx
+ROBOKASSA_RESULT_URL=/api/v1/payments/robokassa/result
+ROBOKASSA_SUCCESS_URL=/api/v1/payments/robokassa/success
+ROBOKASSA_FAIL_URL=/api/v1/payments/robokassa/fail
+ROBOKASSA_DEFAULT_CURRENCY=KZT
+```
+
+### Поля, варианты и что они делают
+
+| Переменная | Варианты / формат | По умолчанию | За что отвечает |
+|---|---|---|---|
+| `DB_URL` | PostgreSQL DSN (`postgres://...`) | `postgres://postgres:1@localhost:5432/postgres?...search_path%3Dnesta` | Подключение к БД. |
+| `PORT` | число в строке, напр. `8080` | `8080` | Порт HTTP-сервера. |
+| `APP_ENV` | любое строковое значение; обычно `development`, `dev`, `local`, `test`, `production` | `development` | Окружение приложения. Влияет на логгер и дефолтный OTP-режим. |
+| `JWT_SECRET` | непустая строка | `dev-secret` | Секрет подписи JWT access-токенов. |
+| `ACCESS_TOKEN_TTL` | duration Go: `15m`, `1h`, `30s` | `15m` | Время жизни access-токена. |
+| `REFRESH_TOKEN_TTL` | duration Go: `720h` и т.д. | `720h` | Время жизни refresh-токена. |
+| `OTP_TTL` | duration Go: `5m`, `3m` | `5m` (и принудительно `5m`, если указано `<=0`) | Сколько живёт OTP-код. |
+| `OTP_RATE_LIMIT` | duration Go: `1m`, `30s` | `1m` (и принудительно `1m`, если указано `<=0`) | Минимальная пауза между отправками OTP на один телефон. |
+| `OTP_MAX_ATTEMPTS` | целое число (`5`, `7`) | `5` (и принудительно `5`, если указано `<=0`) | Максимум неверных вводов OTP до временной блокировки. |
+| `AUTH_OTP_DELIVERY_MODE` | `dev`, `mobizon`, `mobizon+echo`, или пусто | авто: `dev` для `development/dev/local/test`, иначе `mobizon` | Режим доставки/возврата OTP-кода. |
+| `AUTH_OTP_MESSAGE_PREFIX` | строка | `Код подтверждения:` | Префикс SMS-текста перед кодом. |
+| `MOBIZON_BASE_URL` | URL | `https://api.mobizon.kz/service/` | Базовый URL API Mobizon. |
+| `MOBIZON_API_KEY` | строка (секрет) | пусто | Ключ доступа к Mobizon API. |
+| `MOBIZON_SENDER` | строка | пусто | Имя/подпись отправителя SMS (если поддерживается аккаунтом). |
+| `MOBIZON_VALIDITY_MINUTES` | целое число (`0`, `10`, `60`) | `0` | TTL доставки SMS на стороне Mobizon (`params[validity]`). |
+| `SUBSCRIPTION_CANCEL_POLICY` | сейчас фактически используется значение `immediate`; можно задавать другие значения «на будущее» | `immediate` | Политика отмены подписки (зарезервировано в конфиге для бизнес-логики). |
+| `ROBOKASSA_MERCHANT_LOGIN` | строка | пусто | Логин магазина в Robokassa. |
+| `ROBOKASSA_PASSWORD_1` | строка (секрет) | пусто | Пароль #1 для подписи запроса на оплату/успеха. |
+| `ROBOKASSA_PASSWORD_2` | строка (секрет) | пусто | Пароль #2 для проверки Result callback. |
+| `ROBOKASSA_TEST_PASSWORD_1` | строка (секрет) | пусто | Тестовый пароль #1 (для тестового режима Robokassa). |
+| `ROBOKASSA_TEST_PASSWORD_2` | строка (секрет) | пусто | Тестовый пароль #2 (для тестового режима Robokassa). |
+| `ROBOKASSA_IS_TEST` | `true/1/yes` = `true`, любое иное непустое = `false` | `false` | Переключатель тестового режима Robokassa. |
+| `ROBOKASSA_HASH_ALGO` | `MD5` или `SHA256` (регистр неважен) | `MD5` | Алгоритм подписи для Robokassa. |
+| `ROBOKASSA_PAYMENT_URL` | URL | `https://auth.robokassa.kz/Merchant/Index.aspx` | Endpoint редиректа на оплату. |
+| `ROBOKASSA_RESULT_URL` | путь или URL | `/api/v1/payments/robokassa/result` | Callback для серверного подтверждения оплаты. |
+| `ROBOKASSA_SUCCESS_URL` | путь или URL | `/api/v1/payments/robokassa/success` | URL возврата пользователя после успешной оплаты. |
+| `ROBOKASSA_FAIL_URL` | путь или URL | `/api/v1/payments/robokassa/fail` | URL возврата пользователя после неуспешной оплаты. |
+| `ROBOKASSA_DEFAULT_CURRENCY` | валютный код, напр. `KZT` | `KZT` | Валюта оплаты по умолчанию. |
 
 ### Режимы доставки OTP
 
