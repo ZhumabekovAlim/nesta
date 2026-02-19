@@ -28,6 +28,7 @@ type Dependencies struct {
 	Complexes         apiHandlers.ComplexHandler
 	Cities            apiHandlers.CityHandler
 	Plans             apiHandlers.PlanHandler
+	TimeWindows       apiHandlers.TimeWindowHandler
 	SubscriptionTypes apiHandlers.SubscriptionTypeHandler
 	Pickups           apiHandlers.PickupHandler
 	Addresses         addressHandlers.Handler
@@ -57,6 +58,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/cities", deps.Cities.List)
 
 	mux.HandleFunc("/api/v1/plans", deps.Plans.List)
+	mux.HandleFunc("/api/v1/time-windows", deps.TimeWindows.List)
 	mux.HandleFunc("/api/v1/subscription-types", deps.SubscriptionTypes.List)
 
 	mux.HandleFunc("/api/v1/auth/otp/send", deps.Auth.SendOTP)

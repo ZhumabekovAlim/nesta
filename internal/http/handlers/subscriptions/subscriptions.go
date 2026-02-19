@@ -93,15 +93,20 @@ func (h Handler) ListMine(w http.ResponseWriter, r *http.Request) {
 		}
 		entry := map[string]any{
 			"address": map[string]any{
-				"id":           address.ID,
-				"user_id":      address.UserID,
-				"name":         address.Name,
-				"complex_id":   address.ComplexID,
-				"city_id":      address.CityID,
-				"address_json": addressPayload,
-				"created_at":   address.CreatedAt,
+				"id":             address.ID,
+				"user_id":        address.UserID,
+				"name":           address.Name,
+				"complex_id":     address.ComplexID,
+				"city_id":        address.CityID,
+				"time_window_id": nil,
+				"time_window":    address.TimeWindow,
+				"address_json":   addressPayload,
+				"created_at":     address.CreatedAt,
 			},
 			"subscription": nil,
+		}
+		if address.TimeWindowID.Valid {
+			entry["address"].(map[string]any)["time_window_id"] = address.TimeWindowID.String
 		}
 		if sub, ok := subByAddress[address.ID]; ok {
 			entry["subscription"] = sub

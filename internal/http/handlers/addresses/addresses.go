@@ -18,10 +18,11 @@ type Handler struct {
 }
 
 type addressRequest struct {
-	Name      string         `json:"name"`
-	ComplexID string         `json:"complex_id"`
-	CityID    string         `json:"city_id"`
-	Address   map[string]any `json:"address_json"`
+	Name         string         `json:"name"`
+	ComplexID    string         `json:"complex_id"`
+	CityID       string         `json:"city_id"`
+	TimeWindowID string         `json:"time_window_id"`
+	Address      map[string]any `json:"address_json"`
 }
 
 func (h Handler) ListMine(w http.ResponseWriter, r *http.Request) {
@@ -76,10 +77,11 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	address, err := h.Service.Create(r.Context(), userID, services.AddressInput{
-		Name:      strings.TrimSpace(req.Name),
-		ComplexID: strings.TrimSpace(req.ComplexID),
-		CityID:    strings.TrimSpace(req.CityID),
-		Address:   req.Address,
+		Name:         strings.TrimSpace(req.Name),
+		ComplexID:    strings.TrimSpace(req.ComplexID),
+		CityID:       strings.TrimSpace(req.CityID),
+		TimeWindowID: strings.TrimSpace(req.TimeWindowID),
+		Address:      req.Address,
 	})
 	if err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
@@ -109,10 +111,11 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.Update(r.Context(), userID, id, services.AddressInput{
-		Name:      strings.TrimSpace(req.Name),
-		ComplexID: strings.TrimSpace(req.ComplexID),
-		CityID:    strings.TrimSpace(req.CityID),
-		Address:   req.Address,
+		Name:         strings.TrimSpace(req.Name),
+		ComplexID:    strings.TrimSpace(req.ComplexID),
+		CityID:       strings.TrimSpace(req.CityID),
+		TimeWindowID: strings.TrimSpace(req.TimeWindowID),
+		Address:      req.Address,
 	}); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return
@@ -174,12 +177,20 @@ func jsonRawList(items []repositories.Address) []map[string]any {
 
 func jsonRaw(address repositories.Address) map[string]any {
 	payload := map[string]any{
-		"id":         address.ID,
-		"user_id":    address.UserID,
-		"name":       address.Name,
-		"complex_id": address.ComplexID,
-		"city_id":    address.CityID,
-		"created_at": address.CreatedAt,
+		"id":             address.ID,
+		"user_id":        address.UserID,
+		"name":           address.Name,
+		"complex_id":     address.ComplexID,
+		"city_id":        address.CityID,
+		"time_window_id": nil,
+		"time_window":    nil,
+		"created_at":     address.CreatedAt,
+	}
+	if address.TimeWindowID.Valid {
+		payload["time_window_id"] = address.TimeWindowID.String
+	}
+	if address.TimeWindow != nil {
+		payload["time_window"] = address.TimeWindow
 	}
 	if len(address.AddressJSON) == 0 {
 		payload["address_json"] = nil
