@@ -1,9 +1,11 @@
 package users
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"nesta/internal/http/handlers"
 	"nesta/internal/http/middleware"
@@ -12,7 +14,8 @@ import (
 )
 
 type Handler struct {
-	Users *repositories.UserRepository
+	Users       *repositories.UserRepository
+	TimeWindows *repositories.TimeWindowRepository
 }
 
 type updateProfileRequest struct {
@@ -60,7 +63,7 @@ func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"name":                 user.Name.String,
 		"email":                user.Email.String,
 		"role":                 user.Role,
-		"default_address_json": jsonRaw(user.DefaultAddressRaw),
+		"default_address_json": h.defaultAddressPayload(r.Context(), user.DefaultAddressRaw),
 	})
 }
 
@@ -117,4 +120,32 @@ func jsonRaw(raw []byte) any {
 		return nil
 	}
 	return out
+}
+
+func (h Handler) defaultAddressPayload(ctx context.Context, raw []byte) any {
+	value := jsonRaw(raw)
+	if h.TimeWindows == nil {
+		return value
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+
+	timeWindowID, _ := payload["time_window_id"].(string)
+	timeWindowID = strings.TrimSpace(timeWindowID)
+	if timeWindowID == "" {
+		payload["time_window"] = nil
+		return payload
+	}
+
+	timeWindow, err := h.TimeWindows.Get(ctx, timeWindowID)
+	if err != nil {
+		payload["time_window"] = nil
+		return payload
+	}
+
+	payload["time_window"] = timeWindow
+	return payload
 }

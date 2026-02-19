@@ -52,6 +52,7 @@ func main() {
 	repoComplexRequests := repositories.NewComplexRequestRepository(store.DB)
 	repoCities := repositories.NewCityRepository(store.DB)
 	repoPlans := repositories.NewPlanRepository(store.DB)
+	repoTimeWindows := repositories.NewTimeWindowRepository(store.DB)
 	repoSubscriptionTypes := repositories.NewSubscriptionTypeRepository(store.DB)
 	repoAddresses := repositories.NewAddressRepository(store.DB)
 	repoSubscriptions := repositories.NewSubscriptionRepository(store.DB)
@@ -92,9 +93,10 @@ func main() {
 	}
 
 	addressService := &services.AddressService{
-		Addresses: repoAddresses,
-		Complexes: repoComplexes,
-		Cities:    repoCities,
+		Addresses:   repoAddresses,
+		Complexes:   repoComplexes,
+		Cities:      repoCities,
+		TimeWindows: repoTimeWindows,
 	}
 
 	subscriptionService := &services.SubscriptionService{
@@ -125,6 +127,7 @@ func main() {
 		},
 		Cities:            apiHandlers.CityHandler{Cities: repoCities},
 		Plans:             apiHandlers.PlanHandler{Plans: repoPlans},
+		TimeWindows:       apiHandlers.TimeWindowHandler{TimeWindows: repoTimeWindows},
 		SubscriptionTypes: apiHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},
 		Pickups:           apiHandlers.PickupHandler{Logs: repoPickups},
 		Addresses: addressHandlers.Handler{
@@ -136,7 +139,7 @@ func main() {
 			Subscriptions: repoSubscriptions,
 			Addresses:     repoAddresses,
 		},
-		Users:          userHandlers.Handler{Users: repoUsers},
+		Users:          userHandlers.Handler{Users: repoUsers, TimeWindows: repoTimeWindows},
 		Products:       storeHandlers.ProductHandler{Products: repoProducts},
 		Orders:         storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
 		Payments:       paymentHandlers.Handler{Payments: paymentService},

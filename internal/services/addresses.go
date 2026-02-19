@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 
@@ -9,16 +10,18 @@ import (
 )
 
 type AddressService struct {
-	Addresses *repositories.AddressRepository
-	Complexes *repositories.ComplexRepository
-	Cities    *repositories.CityRepository
+	Addresses   *repositories.AddressRepository
+	Complexes   *repositories.ComplexRepository
+	Cities      *repositories.CityRepository
+	TimeWindows *repositories.TimeWindowRepository
 }
 
 type AddressInput struct {
-	Name      string
-	ComplexID string
-	CityID    string
-	Address   map[string]any
+	Name         string
+	ComplexID    string
+	CityID       string
+	TimeWindowID string
+	Address      map[string]any
 }
 
 func (s *AddressService) Create(ctx context.Context, userID string, input AddressInput) (repositories.Address, error) {
@@ -33,6 +36,9 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 	}
 	if input.Address == nil {
 		return repositories.Address{}, errors.New("address required")
+	}
+	if input.TimeWindowID == "" {
+		return repositories.Address{}, errors.New("time window required")
 	}
 
 	city, err := s.Cities.Get(ctx, input.CityID)
@@ -51,6 +57,14 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 		return repositories.Address{}, errors.New("complex not in city")
 	}
 
+	timeWindow, err := s.TimeWindows.Get(ctx, input.TimeWindowID)
+	if err != nil {
+		return repositories.Address{}, errors.New("time window not found")
+	}
+	if !timeWindow.IsActive {
+		return repositories.Address{}, errors.New("time window is not active")
+	}
+
 	raw, err := json.Marshal(input.Address)
 	if err != nil {
 		return repositories.Address{}, errors.New("invalid address")
@@ -62,12 +76,13 @@ func (s *AddressService) Create(ctx context.Context, userID string, input Addres
 	}
 
 	address := repositories.Address{
-		ID:          id,
-		UserID:      userID,
-		Name:        input.Name,
-		ComplexID:   input.ComplexID,
-		CityID:      input.CityID,
-		AddressJSON: raw,
+		ID:           id,
+		UserID:       userID,
+		Name:         input.Name,
+		ComplexID:    input.ComplexID,
+		CityID:       input.CityID,
+		TimeWindowID: sql.NullString{String: input.TimeWindowID, Valid: true},
+		AddressJSON:  raw,
 	}
 
 	if err := s.Addresses.Create(ctx, address); err != nil {
@@ -89,6 +104,9 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 	}
 	if input.Address == nil {
 		return errors.New("address required")
+	}
+	if input.TimeWindowID == "" {
+		return errors.New("time window required")
 	}
 
 	address, err := s.Addresses.Get(ctx, addressID)
@@ -115,18 +133,27 @@ func (s *AddressService) Update(ctx context.Context, userID, addressID string, i
 		return errors.New("complex not in city")
 	}
 
+	timeWindow, err := s.TimeWindows.Get(ctx, input.TimeWindowID)
+	if err != nil {
+		return errors.New("time window not found")
+	}
+	if !timeWindow.IsActive {
+		return errors.New("time window is not active")
+	}
+
 	raw, err := json.Marshal(input.Address)
 	if err != nil {
 		return errors.New("invalid address")
 	}
 
 	_, err = s.Addresses.Update(ctx, repositories.Address{
-		ID:          addressID,
-		UserID:      userID,
-		Name:        input.Name,
-		ComplexID:   input.ComplexID,
-		CityID:      input.CityID,
-		AddressJSON: raw,
+		ID:           addressID,
+		UserID:       userID,
+		Name:         input.Name,
+		ComplexID:    input.ComplexID,
+		CityID:       input.CityID,
+		TimeWindowID: sql.NullString{String: input.TimeWindowID, Valid: true},
+		AddressJSON:  raw,
 	})
 	return err
 }
