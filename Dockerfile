@@ -13,7 +13,7 @@ COPY . .
 RUN go build -o bin/api ./cmd/api
 
 # Build goose CLI
-RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 
 FROM alpine:3.20
