@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -48,4 +49,15 @@ func (r *ComplexRequestRepository) Verify(ctx context.Context, id string, verifi
 		WHERE id = $1
 	`, id, verifiedAt)
 	return err
+}
+
+func (r *ComplexRequestRepository) ExistsByComplexAndPhone(ctx context.Context, complexID, phone string) (bool, error) {
+	_, err := r.FindByComplexAndPhone(ctx, complexID, phone)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return false, err
 }

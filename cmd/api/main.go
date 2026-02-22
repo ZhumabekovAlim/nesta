@@ -122,6 +122,7 @@ func main() {
 		Complexes: apiHandlers.ComplexHandler{
 			Complexes: repoComplexes,
 			Requests:  repoComplexRequests,
+			Users:     repoUsers,
 			Service:   complexService,
 			JWTSecret: cfg.JWTSecret,
 		},

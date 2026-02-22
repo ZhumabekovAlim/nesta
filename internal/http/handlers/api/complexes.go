@@ -1,6 +1,8 @@
 package api
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,8 +18,14 @@ import (
 type ComplexHandler struct {
 	Complexes *repositories.ComplexRepository
 	Requests  *repositories.ComplexRequestRepository
+	Users     *repositories.UserRepository
 	Service   *services.ComplexService
 	JWTSecret string
+}
+
+type complexGetResponse struct {
+	repositories.ResidentialComplex
+	HasRequested bool `json:"has_requested"`
 }
 
 type requestCreate struct {
@@ -61,7 +69,29 @@ func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
-	response.JSON(w, http.StatusOK, item)
+
+	hasRequested := false
+	if h.Users != nil {
+		authHeader := r.Header.Get("Authorization")
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			claims, parseErr := auth.ParseToken(h.JWTSecret, parts[1])
+			if parseErr == nil && claims.Subject != "" {
+				user, userErr := h.Users.FindByID(r.Context(), claims.Subject)
+				if userErr == nil {
+					exists, existsErr := h.Requests.ExistsByComplexAndPhone(r.Context(), id, user.Phone)
+					if existsErr == nil {
+						hasRequested = exists
+					}
+				} else if userErr != nil && !errors.Is(userErr, sql.ErrNoRows) {
+					response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get complex", RequestID: middleware.GetRequestID(r.Context())})
+					return
+				}
+			}
+		}
+	}
+
+	response.JSON(w, http.StatusOK, complexGetResponse{ResidentialComplex: item, HasRequested: hasRequested})
 }
 
 func (h ComplexHandler) CreateRequest(w http.ResponseWriter, r *http.Request) {
