@@ -22,7 +22,14 @@ func (s *ComplexService) CreateRequest(ctx context.Context, complexID, phone str
 		if request.Verified {
 			return request, repositories.ResidentialComplex{}, errors.New("already verified")
 		}
-		return request, repositories.ResidentialComplex{}, errors.New("pending verification")
+
+		complex, verifyErr := s.applyVerification(ctx, request)
+		if verifyErr != nil {
+			return repositories.ComplexRequest{}, repositories.ResidentialComplex{}, verifyErr
+		}
+		request.Verified = true
+		request.VerifiedAt = sql.NullTime{Time: time.Now(), Valid: true}
+		return request, complex, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return repositories.ComplexRequest{}, repositories.ResidentialComplex{}, err
@@ -44,7 +51,14 @@ func (s *ComplexService) CreateRequest(ctx context.Context, complexID, phone str
 		return repositories.ComplexRequest{}, repositories.ResidentialComplex{}, err
 	}
 
-	return request, repositories.ResidentialComplex{}, nil
+	complex, err := s.applyVerification(ctx, request)
+	if err != nil {
+		return repositories.ComplexRequest{}, repositories.ResidentialComplex{}, err
+	}
+	request.Verified = true
+	request.VerifiedAt = sql.NullTime{Time: time.Now(), Valid: true}
+
+	return request, complex, nil
 }
 
 func (s *ComplexService) VerifyRequest(ctx context.Context, request repositories.ComplexRequest) (repositories.ResidentialComplex, error) {
