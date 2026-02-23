@@ -16,16 +16,20 @@ import (
 )
 
 type ComplexHandler struct {
-	Complexes *repositories.ComplexRepository
-	Requests  *repositories.ComplexRequestRepository
-	Users     *repositories.UserRepository
-	Service   *services.ComplexService
-	JWTSecret string
+	Complexes         *repositories.ComplexRepository
+	Requests          *repositories.ComplexRequestRepository
+	Users             *repositories.UserRepository
+	SubscriptionTypes *repositories.SubscriptionTypeRepository
+	TimeWindows       *repositories.TimeWindowRepository
+	Service           *services.ComplexService
+	JWTSecret         string
 }
 
 type complexGetResponse struct {
 	repositories.ResidentialComplex
-	HasRequested bool `json:"has_requested"`
+	HasRequested      bool                            `json:"has_requested"`
+	SubscriptionTypes []repositories.SubscriptionType `json:"subscription_types"`
+	TimeWindows       []repositories.TimeWindow       `json:"time_windows"`
 }
 
 type requestCreate struct {
@@ -91,7 +95,30 @@ func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response.JSON(w, http.StatusOK, complexGetResponse{ResidentialComplex: item, HasRequested: hasRequested})
+	subscriptionTypes := make([]repositories.SubscriptionType, 0)
+	if h.SubscriptionTypes != nil {
+		subscriptionTypes, err = h.SubscriptionTypes.ListActive(r.Context())
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get subscription types", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+	}
+
+	timeWindows := make([]repositories.TimeWindow, 0)
+	if h.TimeWindows != nil {
+		timeWindows, err = h.TimeWindows.ListActive(r.Context())
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get time windows", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+	}
+
+	response.JSON(w, http.StatusOK, complexGetResponse{
+		ResidentialComplex: item,
+		HasRequested:       hasRequested,
+		SubscriptionTypes:  subscriptionTypes,
+		TimeWindows:        timeWindows,
+	})
 }
 
 func (h ComplexHandler) CreateRequest(w http.ResponseWriter, r *http.Request) {
