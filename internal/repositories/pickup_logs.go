@@ -46,6 +46,31 @@ func (r *PickupLogRepository) ListBySubscription(ctx context.Context, subscripti
 	return logs, rows.Err()
 }
 
+func (r *PickupLogRepository) ListByComplex(ctx context.Context, complexID string) ([]PickupLog, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT pl.id, pl.subscription_id, pl.pickup_date, pl.status, pl.comment, pl.reason
+		FROM pickup_logs pl
+		JOIN subscriptions s ON s.id = pl.subscription_id
+		JOIN addresses a ON a.id = s.address_id
+		WHERE a.complex_id = $1
+		ORDER BY pl.pickup_date DESC
+	`, complexID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []PickupLog
+	for rows.Next() {
+		var log PickupLog
+		if err := rows.Scan(&log.ID, &log.SubscriptionID, &log.PickupDate, &log.Status, &log.Comment, &log.Reason); err != nil {
+			return nil, err
+		}
+		logs = append(logs, log)
+	}
+	return logs, rows.Err()
+}
+
 func (r *PickupLogRepository) Create(ctx context.Context, log PickupLog) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO pickup_logs (id, subscription_id, pickup_date, status, comment, reason)

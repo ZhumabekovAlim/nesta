@@ -16,16 +16,20 @@ import (
 )
 
 type ComplexHandler struct {
-	Complexes *repositories.ComplexRepository
-	Requests  *repositories.ComplexRequestRepository
-	Users     *repositories.UserRepository
-	Service   *services.ComplexService
-	JWTSecret string
+	Complexes     *repositories.ComplexRepository
+	Requests      *repositories.ComplexRequestRepository
+	Users         *repositories.UserRepository
+	Subscriptions *repositories.SubscriptionRepository
+	Pickups       *repositories.PickupLogRepository
+	Service       *services.ComplexService
+	JWTSecret     string
 }
 
 type complexGetResponse struct {
 	repositories.ResidentialComplex
-	HasRequested bool `json:"has_requested"`
+	HasRequested          bool                        `json:"has_requested"`
+	ExistingSubscriptions []repositories.Subscription `json:"existing_subscriptions"`
+	PickupSchedules       []repositories.PickupLog    `json:"pickup_schedules"`
 }
 
 type requestCreate struct {
@@ -91,7 +95,30 @@ func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response.JSON(w, http.StatusOK, complexGetResponse{ResidentialComplex: item, HasRequested: hasRequested})
+	subscriptions := make([]repositories.Subscription, 0)
+	if h.Subscriptions != nil {
+		subscriptions, err = h.Subscriptions.ListByComplex(r.Context(), id)
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get complex subscriptions", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+	}
+
+	pickupSchedules := make([]repositories.PickupLog, 0)
+	if h.Pickups != nil {
+		pickupSchedules, err = h.Pickups.ListByComplex(r.Context(), id)
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get pickup schedules", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+	}
+
+	response.JSON(w, http.StatusOK, complexGetResponse{
+		ResidentialComplex:    item,
+		HasRequested:          hasRequested,
+		ExistingSubscriptions: subscriptions,
+		PickupSchedules:       pickupSchedules,
+	})
 }
 
 func (h ComplexHandler) CreateRequest(w http.ResponseWriter, r *http.Request) {

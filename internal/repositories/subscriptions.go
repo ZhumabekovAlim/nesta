@@ -173,6 +173,43 @@ func (r *SubscriptionRepository) ListByUser(ctx context.Context, userID string) 
 	return subs, rows.Err()
 }
 
+func (r *SubscriptionRepository) ListByComplex(ctx context.Context, complexID string) ([]Subscription, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			s.id,
+			s.user_id,
+			s.address_id,
+			s.plan_id,
+			s.status,
+			a.name,
+			a.address_json,
+			a.complex_id,
+			s.time_window,
+			s.instructions,
+			s.current_period_start,
+			s.current_period_end,
+			s.created_at
+		FROM subscriptions s
+		JOIN addresses a ON a.id = s.address_id
+		WHERE a.complex_id = $1
+		ORDER BY s.created_at DESC
+	`, complexID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subs []Subscription
+	for rows.Next() {
+		var sub Subscription
+		if err := rows.Scan(&sub.ID, &sub.UserID, &sub.AddressID, &sub.PlanID, &sub.Status, &sub.AddressName, &sub.AddressJSON, &sub.ComplexID, &sub.TimeWindow, &sub.Instructions, &sub.CurrentPeriodStart, &sub.CurrentPeriodEnd, &sub.CreatedAt); err != nil {
+			return nil, err
+		}
+		subs = append(subs, sub)
+	}
+	return subs, rows.Err()
+}
+
 func (r *SubscriptionRepository) UpdateStatus(ctx context.Context, id, status string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE subscriptions SET status = $2 WHERE id = $1
