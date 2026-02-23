@@ -19,5 +19,5 @@ func (h SubscriptionTypeHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, map[string]any{"items": items})
+	response.JSON(w, http.StatusOK, map[string]any{"items": normalizeSubscriptionTypes(items)})
 }

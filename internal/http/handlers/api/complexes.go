@@ -27,9 +27,9 @@ type ComplexHandler struct {
 
 type complexGetResponse struct {
 	repositories.ResidentialComplex
-	HasRequested  bool                            `json:"has_requested"`
-	Subscriptions []repositories.SubscriptionType `json:"subscriptions"`
-	TimeWindows   []repositories.TimeWindow       `json:"time_windows"`
+	HasRequested  bool                       `json:"has_requested"`
+	Subscriptions []subscriptionTypeResponse `json:"subscriptions"`
+	TimeWindows   []repositories.TimeWindow  `json:"time_windows"`
 }
 
 type requestCreate struct {
@@ -95,13 +95,14 @@ func (h ComplexHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	subscriptions := make([]repositories.SubscriptionType, 0)
+	subscriptions := make([]subscriptionTypeResponse, 0)
 	if h.SubscriptionTypes != nil {
-		subscriptions, err = h.SubscriptionTypes.List(r.Context())
-		if err != nil {
+		subscriptionTypes, subErr := h.SubscriptionTypes.List(r.Context())
+		if subErr != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to get complex subscriptions", RequestID: middleware.GetRequestID(r.Context())})
 			return
 		}
+		subscriptions = normalizeSubscriptionTypes(subscriptionTypes)
 	}
 
 	timeWindows := make([]repositories.TimeWindow, 0)
