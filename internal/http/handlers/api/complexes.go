@@ -141,13 +141,24 @@ func (h ComplexHandler) CreateRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.Users == nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to create request", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	user, err := h.Users.FindByID(r.Context(), claims.Subject)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusUnauthorized, response.Error{Code: "UNAUTHORIZED", Message: "unauthorized", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
 	var req requestCreate
 	if err := handlers.DecodeJSON(r, &req); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
 		return
 	}
 
-	request, _, err := h.Service.CreateRequest(r.Context(), complexID, req.Phone)
+	request, _, err := h.Service.CreateRequest(r.Context(), complexID, user.Phone)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
 		return
