@@ -8,12 +8,12 @@ import (
 )
 
 type SubscriptionType struct {
-	ID         string
-	Title      string
-	Subtitle   sql.NullString
-	PriceCents int
-	Features   []string
-	IsActive   bool
+	ID         string         `json:"id"`
+	Title      string         `json:"title"`
+	Subtitle   sql.NullString `json:"subtitle"`
+	PriceCents int            `json:"price_cents"`
+	Features   []string       `json:"features"`
+	IsActive   bool           `json:"is_active"`
 }
 
 type SubscriptionTypeRepository struct {
@@ -25,10 +25,18 @@ func NewSubscriptionTypeRepository(db *sql.DB) *SubscriptionTypeRepository {
 }
 
 func (r *SubscriptionTypeRepository) ListActive(ctx context.Context) ([]SubscriptionType, error) {
+	return r.list(ctx, `WHERE is_active = TRUE`)
+}
+
+func (r *SubscriptionTypeRepository) List(ctx context.Context) ([]SubscriptionType, error) {
+	return r.list(ctx, "")
+}
+
+func (r *SubscriptionTypeRepository) list(ctx context.Context, filter string) ([]SubscriptionType, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, title, subtitle, price_cents, features, is_active
 		FROM subscription_types
-		WHERE is_active = TRUE
+		`+filter+`
 		ORDER BY price_cents
 	`)
 	if err != nil {

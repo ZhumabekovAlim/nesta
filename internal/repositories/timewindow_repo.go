@@ -22,10 +22,18 @@ func NewTimeWindowRepository(db *sql.DB) *TimeWindowRepository {
 }
 
 func (r *TimeWindowRepository) ListActive(ctx context.Context) ([]TimeWindow, error) {
+	return r.list(ctx, `WHERE is_active = TRUE`)
+}
+
+func (r *TimeWindowRepository) List(ctx context.Context) ([]TimeWindow, error) {
+	return r.list(ctx, "")
+}
+
+func (r *TimeWindowRepository) list(ctx context.Context, filter string) ([]TimeWindow, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, label, start_time, end_time, is_active
 		FROM time_windows
-		WHERE is_active = TRUE
+		`+filter+`
 		ORDER BY start_time, label
 	`)
 	if err != nil {
