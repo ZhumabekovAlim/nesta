@@ -17,6 +17,7 @@ import (
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
 	paymentHandlers "nesta/internal/http/handlers/payments"
+	sitemapHandlers "nesta/internal/http/handlers/sitemap"
 	storeHandlers "nesta/internal/http/handlers/store"
 	subscriptionHandlers "nesta/internal/http/handlers/subscriptions"
 	userHandlers "nesta/internal/http/handlers/users"
@@ -142,10 +143,14 @@ func main() {
 			Subscriptions: repoSubscriptions,
 			Addresses:     repoAddresses,
 		},
-		Users:          userHandlers.Handler{Users: repoUsers, TimeWindows: repoTimeWindows},
-		Products:       storeHandlers.ProductHandler{Products: repoProducts},
-		Orders:         storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
-		Payments:       paymentHandlers.Handler{Payments: paymentService},
+		Users:    userHandlers.Handler{Users: repoUsers, TimeWindows: repoTimeWindows},
+		Products: storeHandlers.ProductHandler{Products: repoProducts},
+		Orders:   storeHandlers.OrderHandler{Service: orderService, Orders: repoOrders},
+		Payments: paymentHandlers.Handler{Payments: paymentService},
+		InternalComplexes: sitemapHandlers.ComplexHandler{
+			Complexes:     repoComplexes,
+			SitemapSecret: cfg.SitemapSecret,
+		},
 		AdminComplexes: adminHandlers.ComplexHandler{Complexes: repoComplexes, Cities: repoCities, Service: complexService},
 		AdminPlans:     adminHandlers.PlanHandler{Plans: repoPlans},
 		AdminSubTypes:  adminHandlers.SubscriptionTypeHandler{Types: repoSubscriptionTypes},

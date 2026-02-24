@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type ResidentialComplex struct {
@@ -16,6 +17,11 @@ type ResidentialComplex struct {
 	Status          string
 	Threshold       int
 	CurrentRequests int
+}
+
+type ComplexSitemapItem struct {
+	Slug      string    `json:"slug"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ComplexRepository struct {
@@ -102,6 +108,29 @@ func (r *ComplexRepository) Create(ctx context.Context, complex ResidentialCompl
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, complex.ID, complex.Name, complex.Address, complex.City, complex.CityID, complex.Status, complex.Threshold, complex.CurrentRequests)
 	return err
+}
+
+func (r *ComplexRepository) ListSitemap(ctx context.Context) ([]ComplexSitemapItem, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id AS slug, created_at AS updated_at
+		FROM residential_complexes
+		ORDER BY name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]ComplexSitemapItem, 0)
+	for rows.Next() {
+		var item ComplexSitemapItem
+		if err := rows.Scan(&item.Slug, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
 }
 
 func itoa(value int) string {
