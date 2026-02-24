@@ -16,6 +16,11 @@ type ComplexService struct {
 	ThresholdStatus string
 }
 
+const (
+	complexStatusPlanning   = "PLANNING"
+	complexStatusCollecting = "COLLECTING"
+)
+
 func (s *ComplexService) CreateRequest(ctx context.Context, complexID, phone string) (repositories.ComplexRequest, repositories.ResidentialComplex, error) {
 	request, err := s.Requests.FindByComplexAndPhone(ctx, complexID, phone)
 	if err == nil {
@@ -93,10 +98,7 @@ func (s *ComplexService) applyVerification(ctx context.Context, request reposito
 	}
 
 	newCount := complex.CurrentRequests + 1
-	newStatus := complex.Status
-	if complex.Threshold > 0 && newCount >= complex.Threshold {
-		newStatus = s.ThresholdStatus
-	}
+	newStatus := nextComplexStatus(complex.Status, newCount, complex.Threshold, s.ThresholdStatus)
 
 	_, err = tx.ExecContext(ctx, `
 		UPDATE residential_complexes SET current_requests = $2, status = $3 WHERE id = $1
@@ -112,4 +114,16 @@ func (s *ComplexService) applyVerification(ctx context.Context, request reposito
 	complex.CurrentRequests = newCount
 	complex.Status = newStatus
 	return complex, nil
+}
+
+func nextComplexStatus(currentStatus string, newCount, threshold int, thresholdStatus string) string {
+	if currentStatus == complexStatusPlanning && newCount > 0 {
+		return complexStatusCollecting
+	}
+
+	if threshold > 0 && newCount >= threshold {
+		return thresholdStatus
+	}
+
+	return currentStatus
 }
