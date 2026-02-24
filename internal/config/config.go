@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL        string
 	Env                string
 	JWTSecret          string
+	SitemapSecret      string
 	AccessTokenTTL     time.Duration
 	RefreshTokenTTL    time.Duration
 	OTPTTL             time.Duration
@@ -68,6 +69,7 @@ func Load() Config {
 		DatabaseURL:     getEnv("DB_URL", "postgres://postgres:1@localhost:5432/postgres?sslmode=disable&options=-c%20search_path%3Dnesta"),
 		Env:             env,
 		JWTSecret:       getEnv("JWT_SECRET", "dev-secret"),
+		SitemapSecret:   getEnv("SITEMAP_SECRET", ""),
 		AccessTokenTTL:  getDurationEnv("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL: getDurationEnv("REFRESH_TOKEN_TTL", 720*time.Hour),
 		OTPTTL:          otpTTL,

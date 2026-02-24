@@ -525,6 +525,7 @@ export DB_URL="postgres://nesta:nesta@localhost:5432/nesta?sslmode=disable"
 export PORT=8080
 export APP_ENV=development
 export JWT_SECRET="dev-secret"
+export SITEMAP_SECRET="6370148d15001f9a1c18d4e444559ce1ca55de2e910b4ecc7c18faec321150a7"
 export ACCESS_TOKEN_TTL=15m
 export REFRESH_TOKEN_TTL=720h
 export OTP_TTL=5m
@@ -545,6 +546,8 @@ go run ./cmd/api
 - `PORT` — порт HTTP сервера.
 - `APP_ENV` — окружение (`development` включает консольный логгер).
 - `JWT_SECRET` — секрет для подписи JWT.
+- `SITEMAP_SECRET` — секрет для `GET /api/v1/internal/complexes/sitemap` (передается в `X-Sitemap-Secret`).
+- `SITEMAP_API_SECRET` — алиас для секрета на стороне сайта (если удобно разделять имена переменных, значение должно совпадать с `SITEMAP_SECRET`).
 - `ACCESS_TOKEN_TTL` — TTL access токена (например `15m`).
 - `REFRESH_TOKEN_TTL` — TTL refresh токена (например `720h`).
 - `OTP_TTL` — время жизни OTP кода (например `5m`).

@@ -9,6 +9,7 @@ import (
 	apiHandlers "nesta/internal/http/handlers/api"
 	authHandlers "nesta/internal/http/handlers/auth"
 	paymentHandlers "nesta/internal/http/handlers/payments"
+	sitemapHandlers "nesta/internal/http/handlers/sitemap"
 	storeHandlers "nesta/internal/http/handlers/store"
 	subscriptionHandlers "nesta/internal/http/handlers/subscriptions"
 	userHandlers "nesta/internal/http/handlers/users"
@@ -37,6 +38,7 @@ type Dependencies struct {
 	Products          storeHandlers.ProductHandler
 	Orders            storeHandlers.OrderHandler
 	Payments          paymentHandlers.Handler
+	InternalComplexes sitemapHandlers.ComplexHandler
 	AdminComplexes    adminHandlers.ComplexHandler
 	AdminPlans        adminHandlers.PlanHandler
 	AdminSubTypes     adminHandlers.SubscriptionTypeHandler
@@ -87,6 +89,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/payments/robokassa/result", deps.Payments.ResultRobokassa)
 	mux.HandleFunc("/api/v1/payments/robokassa/success", deps.Payments.SuccessRobokassa)
 	mux.HandleFunc("/api/v1/payments/robokassa/fail", deps.Payments.FailRobokassa)
+	mux.HandleFunc("/api/v1/internal/complexes/sitemap", deps.InternalComplexes.Sitemap)
 
 	adminAuth := func(handler http.HandlerFunc) http.Handler {
 		return middleware.Auth(jwtSecret)(middleware.RequireRole("admin")(handler))
