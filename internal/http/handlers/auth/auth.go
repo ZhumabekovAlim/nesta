@@ -14,8 +14,14 @@ type Handler struct {
 	Auth *services.AuthService
 }
 
+type checkPhoneRequest struct {
+	Phone string `json:"phone"`
+}
+
 type sendOTPRequest struct {
 	Phone string `json:"phone"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type verifyOTPRequest struct {
@@ -27,6 +33,26 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+func (h Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
+	var req checkPhoneRequest
+	if err := handlers.DecodeJSON(r, &req); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	result, err := h.Auth.CheckPhone(r.Context(), req.Phone)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{
+		"phone":            result.Phone,
+		"is_new_user":      result.IsNewUser,
+		"requires_profile": result.RequiresProfile,
+	})
+}
+
 func (h Handler) SendOTP(w http.ResponseWriter, r *http.Request) {
 	var req sendOTPRequest
 	if err := handlers.DecodeJSON(r, &req); err != nil {
@@ -34,7 +60,7 @@ func (h Handler) SendOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.Auth.SendOTP(r.Context(), req.Phone)
+	result, err := h.Auth.SendOTP(r.Context(), req.Phone, req.Name, req.Email)
 	if err != nil {
 		code := "VALIDATION_ERROR"
 		status := http.StatusBadRequest

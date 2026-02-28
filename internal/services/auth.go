@@ -28,6 +28,7 @@ const (
 var (
 	ErrPhoneRequired    = errors.New("phone required")
 	ErrPhoneInvalid     = errors.New("invalid phone")
+	ErrNameRequired     = errors.New("name required")
 	ErrRateLimited      = errors.New("rate limited")
 	ErrBlocked          = errors.New("blocked")
 	ErrOTPNotFound      = errors.New("otp not found")
@@ -84,13 +85,36 @@ type OTPResult struct {
 	ExpiresAt time.Time
 }
 
+type PhoneCheckResult struct {
+	Phone           string
+	IsNewUser       bool
+	RequiresProfile bool
+}
+
 type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
 }
 
-func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, error) {
+func (s *AuthService) CheckPhone(ctx context.Context, phone string) (PhoneCheckResult, error) {
+	normalizedPhone, err := NormalizePhone(phone)
+	if err != nil {
+		return PhoneCheckResult{}, err
+	}
+
+	_, err = s.Users.FindByPhone(ctx, normalizedPhone)
+	if err == nil {
+		return PhoneCheckResult{Phone: normalizedPhone, IsNewUser: false, RequiresProfile: false}, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return PhoneCheckResult{Phone: normalizedPhone, IsNewUser: true, RequiresProfile: true}, nil
+	}
+
+	return PhoneCheckResult{}, err
+}
+
+func (s *AuthService) SendOTP(ctx context.Context, phone, name, email string) (OTPResult, error) {
 	log.Info().Str("phone", MaskPhone(phone)).Msg("otp send started")
 
 	normalizedPhone, err := NormalizePhone(phone)
@@ -100,6 +124,32 @@ func (s *AuthService) SendOTP(ctx context.Context, phone string) (OTPResult, err
 	}
 
 	log.Info().Str("phone", MaskPhone(normalizedPhone)).Msg("otp send phone normalized")
+
+	_, err = s.Users.FindByPhone(ctx, normalizedPhone)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return OTPResult{}, err
+		}
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" {
+			return OTPResult{}, ErrNameRequired
+		}
+
+		id, idErr := NewID()
+		if idErr != nil {
+			return OTPResult{}, idErr
+		}
+
+		newUser := repositories.User{ID: id, Phone: normalizedPhone, Role: "user", Name: sql.NullString{String: trimmedName, Valid: true}}
+		trimmedEmail := strings.TrimSpace(email)
+		if trimmedEmail != "" {
+			newUser.Email = sql.NullString{String: trimmedEmail, Valid: true}
+		}
+
+		if createErr := s.Users.Create(ctx, newUser); createErr != nil {
+			return OTPResult{}, createErr
+		}
+	}
 
 	latest, err := s.OTP.LatestByPhone(ctx, normalizedPhone)
 	if err == nil {
@@ -226,17 +276,7 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 
 	user, err := s.Users.FindByPhone(ctx, normalizedPhone)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return TokenPair{}, err
-		}
-		id, err := NewID()
-		if err != nil {
-			return TokenPair{}, err
-		}
-		user = repositories.User{ID: id, Phone: normalizedPhone, Role: "user"}
-		if err := s.Users.Create(ctx, user); err != nil {
-			return TokenPair{}, err
-		}
+		return TokenPair{}, err
 	}
 
 	return s.issueTokens(ctx, user.ID, user.Role)
