@@ -11,6 +11,27 @@ import (
 	"nesta/internal/sms/mobizon"
 )
 
+type fakeUserStore struct {
+	findByPhoneFn func(context.Context, string) (repositories.User, error)
+	createdUsers  []repositories.User
+}
+
+func (f *fakeUserStore) FindByPhone(ctx context.Context, phone string) (repositories.User, error) {
+	if f.findByPhoneFn != nil {
+		return f.findByPhoneFn(ctx, phone)
+	}
+	return repositories.User{}, sql.ErrNoRows
+}
+
+func (f *fakeUserStore) Create(_ context.Context, user repositories.User) error {
+	f.createdUsers = append(f.createdUsers, user)
+	return nil
+}
+
+func (f *fakeUserStore) FindByID(context.Context, string) (repositories.User, error) {
+	return repositories.User{}, sql.ErrNoRows
+}
+
 type fakeOTPStore struct {
 	latest       repositories.OTPCode
 	latestErr    error
@@ -64,14 +85,42 @@ func TestNormalizePhone(t *testing.T) {
 	}
 }
 
+func TestCheckPhone_NewUser(t *testing.T) {
+	users := &fakeUserStore{}
+	svc := &AuthService{Users: users}
+
+	result, err := svc.CheckPhone(context.Background(), "+79990001122")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !result.IsNewUser || !result.RequiresProfile {
+		t.Fatalf("expected new user with profile requirement")
+	}
+}
+
+func TestSendOTP_NewUserRequiresName(t *testing.T) {
+	otp := &fakeOTPStore{latestErr: sql.ErrNoRows}
+	users := &fakeUserStore{}
+	svc := &AuthService{Users: users, OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeDev, OTPRateLimit: time.Second}
+
+	_, err := svc.SendOTP(context.Background(), "+79990001122", "", "")
+	if !errors.Is(err, ErrNameRequired) {
+		t.Fatalf("expected ErrNameRequired got %v", err)
+	}
+}
+
 func TestSendOTP_DevModeDoesNotCallSMS(t *testing.T) {
 	otp := &fakeOTPStore{latestErr: sql.ErrNoRows}
 	sms := &fakeSMS{}
-	svc := &AuthService{OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeDev, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
+	users := &fakeUserStore{}
+	svc := &AuthService{Users: users, OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeDev, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
 
-	result, err := svc.SendOTP(context.Background(), "+79990001122")
+	result, err := svc.SendOTP(context.Background(), "+79990001122", "Иван Иванов", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(users.createdUsers) != 1 {
+		t.Fatalf("expected user to be created")
 	}
 	if sms.calls != 0 {
 		t.Fatalf("expected sms not called")
@@ -84,9 +133,12 @@ func TestSendOTP_DevModeDoesNotCallSMS(t *testing.T) {
 func TestSendOTP_MobizonModeHidesDevCode(t *testing.T) {
 	otp := &fakeOTPStore{latestErr: sql.ErrNoRows}
 	sms := &fakeSMS{}
-	svc := &AuthService{OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeMobizon, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
+	users := &fakeUserStore{findByPhoneFn: func(context.Context, string) (repositories.User, error) {
+		return repositories.User{ID: "u1", Phone: "79990001122", Role: "user"}, nil
+	}}
+	svc := &AuthService{Users: users, OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeMobizon, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
 
-	result, err := svc.SendOTP(context.Background(), "+79990001122")
+	result, err := svc.SendOTP(context.Background(), "+79990001122", "", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -101,9 +153,12 @@ func TestSendOTP_MobizonModeHidesDevCode(t *testing.T) {
 func TestSendOTP_MobizonRateLimit(t *testing.T) {
 	otp := &fakeOTPStore{latestErr: sql.ErrNoRows}
 	sms := &fakeSMS{err: &mobizon.APIError{Code: 30, Message: "limit"}}
-	svc := &AuthService{OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeMobizon, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
+	users := &fakeUserStore{findByPhoneFn: func(context.Context, string) (repositories.User, error) {
+		return repositories.User{ID: "u1", Phone: "79990001122", Role: "user"}, nil
+	}}
+	svc := &AuthService{Users: users, OTP: otp, OTPTTL: time.Minute, OTPDeliveryMode: OTPDeliveryModeMobizon, SMS: sms, OTPMessagePrefix: "Код подтверждения:"}
 
-	_, err := svc.SendOTP(context.Background(), "+79990001122")
+	_, err := svc.SendOTP(context.Background(), "+79990001122", "", "")
 	if !errors.Is(err, ErrSMSRateLimited) {
 		t.Fatalf("expected ErrSMSRateLimited got %v", err)
 	}
