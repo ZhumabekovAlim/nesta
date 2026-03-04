@@ -117,6 +117,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 
 func (s *Server) Handler() http.Handler {
 	h := middleware.RequestID(s.mux)
+	h = middleware.CORS([]string{"https://v0-admin-panel-design-one-snowy.vercel.app"})(h)
 	h = middleware.Logging(s.logger)(h)
 	return h
 }
