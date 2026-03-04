@@ -66,6 +66,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	mux.HandleFunc("/api/v1/auth/phone/check", deps.Auth.CheckPhone)
 	mux.HandleFunc("/api/v1/auth/otp/send", deps.Auth.SendOTP)
 	mux.HandleFunc("/api/v1/auth/otp/verify", deps.Auth.VerifyOTP)
+	mux.HandleFunc("/api/v1/auth/admin/login", deps.Auth.AdminLogin)
 	mux.HandleFunc("/api/v1/auth/refresh", deps.Auth.Refresh)
 	mux.HandleFunc("/api/v1/auth/logout", deps.Auth.Logout)
 

@@ -103,3 +103,43 @@ Response 200:
 - Валидировать `name` как обязательное поле только когда `requires_profile = true`.
 - Для существующих пользователей отправлять `otp/send` без `name/email`.
 - Текущий экран ввода OTP и шаг `otp/verify` остаются без изменений.
+
+---
+
+## Отдельный вход для админов (без OTP)
+
+### API
+
+`POST /api/v1/auth/admin/login`
+
+Request:
+```json
+{
+  "login": "admin",
+  "password": "your-password"
+}
+```
+
+Response 200:
+```json
+{
+  "access_token": "...",
+  "expires_at": "2026-01-01T12:30:00Z"
+}
+```
+
+> Для админ-логина refresh token не выдается. При истечении access token нужно повторно выполнить admin/login.
+
+### Конфигурация
+
+Используется env `ADMIN_AUTH_CREDENTIALS` в формате:
+
+`login1:bcrypt_hash1;login2:bcrypt_hash2`
+
+Пример генерации bcrypt-хеша:
+
+```bash
+htpasswd -bnBC 10 "" "strong-password" | tr -d ':\n'
+```
+
+Эта схема не требует изменений БД и исключает расходы на SMS/OTP для входа админов.

@@ -33,6 +33,11 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type adminLoginRequest struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
+}
+
 func (h Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
 	var req checkPhoneRequest
 	if err := handlers.DecodeJSON(r, &req); err != nil {
@@ -99,6 +104,31 @@ func (h Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		"access_token":  pair.AccessToken,
 		"refresh_token": pair.RefreshToken,
 		"expires_at":    pair.ExpiresAt,
+	})
+}
+
+func (h Handler) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	var req adminLoginRequest
+	if err := handlers.DecodeJSON(r, &req); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	pair, err := h.Auth.AdminLogin(r.Context(), req.Login, req.Password)
+	if err != nil {
+		status := http.StatusUnauthorized
+		code := "UNAUTHORIZED"
+		if !errors.Is(err, services.ErrInvalidAdminCredentials) {
+			status = http.StatusBadRequest
+			code = "VALIDATION_ERROR"
+		}
+		response.ErrorJSON(w, status, response.Error{Code: code, Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{
+		"access_token": pair.AccessToken,
+		"expires_at":   pair.ExpiresAt,
 	})
 }
 

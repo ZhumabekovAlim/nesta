@@ -17,6 +17,7 @@ import (
 	"nesta/internal/sms/mobizon"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -26,16 +27,17 @@ const (
 )
 
 var (
-	ErrPhoneRequired    = errors.New("phone required")
-	ErrPhoneInvalid     = errors.New("invalid phone")
-	ErrNameRequired     = errors.New("name required")
-	ErrRateLimited      = errors.New("rate limited")
-	ErrBlocked          = errors.New("blocked")
-	ErrOTPNotFound      = errors.New("otp not found")
-	ErrOTPExpired       = errors.New("otp expired")
-	ErrInvalidCode      = errors.New("invalid code")
-	ErrSMSRateLimited   = errors.New("sms provider rate limited")
-	ErrSMSDeliveryError = errors.New("sms delivery failed")
+	ErrPhoneRequired           = errors.New("phone required")
+	ErrPhoneInvalid            = errors.New("invalid phone")
+	ErrNameRequired            = errors.New("name required")
+	ErrRateLimited             = errors.New("rate limited")
+	ErrBlocked                 = errors.New("blocked")
+	ErrOTPNotFound             = errors.New("otp not found")
+	ErrOTPExpired              = errors.New("otp expired")
+	ErrInvalidCode             = errors.New("invalid code")
+	ErrSMSRateLimited          = errors.New("sms provider rate limited")
+	ErrSMSDeliveryError        = errors.New("sms delivery failed")
+	ErrInvalidAdminCredentials = errors.New("invalid admin credentials")
 )
 
 var nonDigit = regexp.MustCompile(`\D`)
@@ -78,6 +80,7 @@ type AuthService struct {
 	OTPValidityMin   int
 	OTPMessagePrefix string
 	SMS              smsSender
+	AdminCredentials map[string]string
 }
 
 type OTPResult struct {
@@ -282,6 +285,30 @@ func (s *AuthService) VerifyOTP(ctx context.Context, phone, code string) (TokenP
 	return s.issueTokens(ctx, user.ID, user.Role)
 }
 
+func (s *AuthService) AdminLogin(_ context.Context, login, password string) (TokenPair, error) {
+	trimmedLogin := strings.TrimSpace(login)
+	trimmedPassword := strings.TrimSpace(password)
+	if trimmedLogin == "" || trimmedPassword == "" {
+		return TokenPair{}, ErrInvalidAdminCredentials
+	}
+
+	hash, ok := s.AdminCredentials[trimmedLogin]
+	if !ok {
+		return TokenPair{}, ErrInvalidAdminCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(trimmedPassword)); err != nil {
+		return TokenPair{}, ErrInvalidAdminCredentials
+	}
+
+	accessToken, expiresAt, err := s.issueAccessToken("admin:"+trimmedLogin, "admin")
+	if err != nil {
+		return TokenPair{}, err
+	}
+
+	return TokenPair{AccessToken: accessToken, ExpiresAt: expiresAt}, nil
+}
+
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	stored, err := s.RefreshTokens.FindByToken(ctx, refreshToken)
 	if err != nil {
@@ -307,24 +334,12 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 }
 
 func (s *AuthService) issueTokens(ctx context.Context, userID, role string) (TokenPair, error) {
-	accessID, err := NewID()
-	if err != nil {
-		return TokenPair{}, err
-	}
 	refreshID, err := NewID()
 	if err != nil {
 		return TokenPair{}, err
 	}
 
-	issuedAt := time.Now()
-	expiresAt := issuedAt.Add(s.AccessTTL)
-	accessToken, err := auth.NewToken(s.JWTSecret, auth.Claims{
-		Subject: userID,
-		Role:    role,
-		Issued:  issuedAt.Unix(),
-		Expires: expiresAt.Unix(),
-		ID:      accessID,
-	})
+	accessToken, expiresAt, err := s.issueAccessToken(userID, role)
 	if err != nil {
 		return TokenPair{}, err
 	}
@@ -338,12 +353,34 @@ func (s *AuthService) issueTokens(ctx context.Context, userID, role string) (Tok
 		ID:        refreshID,
 		UserID:    userID,
 		Token:     refreshTokenValue,
-		ExpiresAt: issuedAt.Add(s.RefreshTTL),
+		ExpiresAt: time.Now().Add(s.RefreshTTL),
 	}); err != nil {
 		return TokenPair{}, err
 	}
 
 	return TokenPair{AccessToken: accessToken, RefreshToken: refreshTokenValue, ExpiresAt: expiresAt}, nil
+}
+
+func (s *AuthService) issueAccessToken(userID, role string) (string, time.Time, error) {
+	accessID, err := NewID()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	issuedAt := time.Now()
+	expiresAt := issuedAt.Add(s.AccessTTL)
+	accessToken, err := auth.NewToken(s.JWTSecret, auth.Claims{
+		Subject: userID,
+		Role:    role,
+		Issued:  issuedAt.Unix(),
+		Expires: expiresAt.Unix(),
+		ID:      accessID,
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	return accessToken, expiresAt, nil
 }
 
 func NormalizePhone(phone string) (string, error) {
