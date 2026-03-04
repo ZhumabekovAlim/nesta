@@ -51,6 +51,19 @@ func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if role, ok := middleware.RoleFromContext(r.Context()); ok && role == "admin" {
+		login := strings.TrimPrefix(userID, "admin:")
+		response.JSON(w, http.StatusOK, map[string]any{
+			"id":                   userID,
+			"phone":                "",
+			"name":                 login,
+			"email":                "",
+			"role":                 role,
+			"default_address_json": nil,
+		})
+		return
+	}
+
 	user, err := h.Users.FindByID(r.Context(), userID)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "user not found", RequestID: middleware.GetRequestID(r.Context())})
