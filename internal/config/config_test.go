@@ -40,3 +40,19 @@ func TestLoad_OTPSettingsUseProvidedPositiveValues(t *testing.T) {
 		t.Fatalf("expected OTPMaxAttempts 7, got %d", cfg.OTPMaxAttempts)
 	}
 }
+
+func TestLoad_AdminCredentials(t *testing.T) {
+	t.Setenv("ADMIN_AUTH_CREDENTIALS", "admin1:$2a$10$hash1; admin2 : $2a$10$hash2 ; invalid ; :missinglogin")
+
+	cfg := Load()
+
+	if len(cfg.AdminAuth.Credentials) != 2 {
+		t.Fatalf("expected 2 credentials, got %d", len(cfg.AdminAuth.Credentials))
+	}
+	if cfg.AdminAuth.Credentials["admin1"] != "$2a$10$hash1" {
+		t.Fatalf("unexpected hash for admin1")
+	}
+	if cfg.AdminAuth.Credentials["admin2"] != "$2a$10$hash2" {
+		t.Fatalf("unexpected hash for admin2")
+	}
+}

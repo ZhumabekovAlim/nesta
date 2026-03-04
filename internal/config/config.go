@@ -22,6 +22,11 @@ type Config struct {
 	Mobizon            MobizonConfig
 	SubscriptionPolicy string
 	Robokassa          RobokassaConfig
+	AdminAuth          AdminAuthConfig
+}
+
+type AdminAuthConfig struct {
+	Credentials map[string]string
 }
 
 type MobizonConfig struct {
@@ -98,7 +103,36 @@ func Load() Config {
 			FailURL:         getEnv("ROBOKASSA_FAIL_URL", "/api/v1/payments/robokassa/fail"),
 			DefaultCurrency: getEnv("ROBOKASSA_DEFAULT_CURRENCY", "KZT"),
 		},
+		AdminAuth: AdminAuthConfig{
+			Credentials: parseAdminCredentials(getEnv("ADMIN_AUTH_CREDENTIALS", "")),
+		},
 	}
+}
+
+func parseAdminCredentials(value string) map[string]string {
+	result := make(map[string]string)
+
+	for _, entry := range strings.Split(value, ";") {
+		trimmedEntry := strings.TrimSpace(entry)
+		if trimmedEntry == "" {
+			continue
+		}
+
+		parts := strings.SplitN(trimmedEntry, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		login := strings.TrimSpace(parts[0])
+		hash := strings.TrimSpace(parts[1])
+		if login == "" || hash == "" {
+			continue
+		}
+
+		result[login] = hash
+	}
+
+	return result
 }
 
 func defaultOTPDeliveryMode(env string) string {

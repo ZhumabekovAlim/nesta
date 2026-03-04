@@ -84,6 +84,7 @@ func main() {
 		OTPValidityMin:   cfg.Mobizon.Validity,
 		OTPMessagePrefix: cfg.Mobizon.MessagePrefix,
 		SMS:              mobizonClient,
+		AdminCredentials: cfg.AdminAuth.Credentials,
 	}
 
 	complexService := &services.ComplexService{
