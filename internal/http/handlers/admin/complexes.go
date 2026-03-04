@@ -20,6 +20,7 @@ type ComplexHandler struct {
 
 type complexCreateRequest struct {
 	Name      string `json:"name"`
+	Slug      string `json:"slug"`
 	Address   string `json:"address"`
 	CityID    string `json:"city_id"`
 	Status    string `json:"status"`
@@ -57,10 +58,14 @@ func (h ComplexHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := services.NewID()
-	if err != nil {
-		response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to create", RequestID: middleware.GetRequestID(r.Context())})
-		return
+	id := strings.TrimSpace(req.Slug)
+	if id == "" {
+		var err error
+		id, err = services.NewID()
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, response.Error{Code: "INTERNAL_ERROR", Message: "failed to create", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
 	}
 
 	complex := repositories.ResidentialComplex{
