@@ -98,7 +98,7 @@ func New(logger zerolog.Logger, deps Dependencies, jwtSecret string) *Server {
 	}
 
 	mux.Handle("/api/v1/admin/complexes", adminAuth(http.HandlerFunc(deps.AdminComplexes.HandleCollection)))
-	mux.Handle("/api/v1/admin/complexes/", adminAuth(http.HandlerFunc(deps.AdminComplexes.UpdateStatus)))
+	mux.Handle("/api/v1/admin/complexes/", adminAuth(http.HandlerFunc(deps.AdminComplexes.HandleItem)))
 	mux.Handle("/api/v1/admin/plans", adminAuth(http.HandlerFunc(deps.AdminPlans.HandleCollection)))
 	mux.Handle("/api/v1/admin/plans/", adminAuth(http.HandlerFunc(deps.AdminPlans.Update)))
 	mux.Handle("/api/v1/admin/subscription-types", adminAuth(http.HandlerFunc(deps.AdminSubTypes.HandleCollection)))

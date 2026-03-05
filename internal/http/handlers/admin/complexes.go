@@ -2,6 +2,7 @@ package admin
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -46,6 +47,19 @@ func (h ComplexHandler) HandleCollection(w http.ResponseWriter, r *http.Request)
 		h.List(w, r)
 	case http.MethodPost:
 		h.Create(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h ComplexHandler) HandleItem(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		h.Update(w, r)
+	case http.MethodDelete:
+		h.Delete(w, r)
+	case http.MethodPatch:
+		h.UpdateStatus(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -98,6 +112,73 @@ func defaultThreshold(value int) int {
 		return 30
 	}
 	return value
+}
+
+func (h ComplexHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/complexes/")
+	if id == "" {
+		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	var req complexCreateRequest
+	if err := handlers.DecodeJSON(r, &req); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid payload", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	city, err := h.Cities.Get(r.Context(), req.CityID)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: "invalid city", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	current, err := h.Complexes.Get(r.Context(), id)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	complex := repositories.ResidentialComplex{
+		ID:              id,
+		Name:            req.Name,
+		Address:         sql.NullString{String: req.Address, Valid: true},
+		City:            city.Name,
+		CityID:          req.CityID,
+		Status:          req.Status,
+		Threshold:       defaultThreshold(req.Threshold),
+		CurrentRequests: current.CurrentRequests,
+	}
+
+	if err := h.Complexes.Update(r.Context(), complex); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, complex)
+}
+
+func (h ComplexHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/complexes/")
+	if id == "" {
+		response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	if err := h.Complexes.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			response.ErrorJSON(w, http.StatusNotFound, response.Error{Code: "NOT_FOUND", Message: "complex not found", RequestID: middleware.GetRequestID(r.Context())})
+			return
+		}
+		response.ErrorJSON(w, http.StatusBadRequest, response.Error{Code: "VALIDATION_ERROR", Message: err.Error(), RequestID: middleware.GetRequestID(r.Context())})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h ComplexHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {

@@ -102,6 +102,44 @@ func (r *ComplexRepository) UpdateStatusAndRequests(ctx context.Context, id, sta
 	return err
 }
 
+func (r *ComplexRepository) Update(ctx context.Context, complex ResidentialComplex) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE residential_complexes
+		SET name = $2, address = $3, city = $4, city_id = $5, status = $6, threshold_n = $7, current_requests = $8
+		WHERE id = $1
+	`, complex.ID, complex.Name, complex.Address, complex.City, complex.CityID, complex.Status, complex.Threshold, complex.CurrentRequests)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (r *ComplexRepository) Delete(ctx context.Context, id string) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM residential_complexes WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
 func (r *ComplexRepository) Create(ctx context.Context, complex ResidentialComplex) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO residential_complexes (id, name, address, city, city_id, status, threshold_n, current_requests)
